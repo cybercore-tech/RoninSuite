@@ -71,7 +71,6 @@ CREATE TABLE IF NOT EXISTS findings (
     data        TEXT NOT NULL          -- full Finding as JSON
 );
 CREATE INDEX IF NOT EXISTS idx_runs_eng ON runs(engagement);
-CREATE INDEX IF NOT EXISTS idx_eng_client ON engagements(client_slug);
 CREATE INDEX IF NOT EXISTS idx_find_eng ON findings(engagement);
 CREATE INDEX IF NOT EXISTS idx_find_run ON findings(run_id);
 CREATE INDEX IF NOT EXISTS idx_find_fp  ON findings(engagement, fingerprint);
@@ -89,6 +88,8 @@ def _migrate(conn: sqlite3.Connection) -> None:
         cols = {r["name"] for r in conn.execute(f"PRAGMA table_info({table})")}
         if col not in cols:
             conn.execute(f"ALTER TABLE {table} ADD COLUMN {col} {decl}")
+    # indexes that depend on migrated columns
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_eng_client ON engagements(client_slug)")
 
 
 @contextmanager
