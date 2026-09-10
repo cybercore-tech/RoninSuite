@@ -98,6 +98,8 @@ in `ronin client`.
 ronin add                              # same as --list
 ronin add --list [--category recon] [--search subdomain]
 ronin add subfinder dalfox certipy     # install by name
+ronin add --missing [-y]               # install every not-installed adapter tool
+ronin add --missing --extended         # …plus the extended catalog
 ronin add <name> --dry-run             # print the install commands only
 ```
 Resolves against the **core catalog** (adapters) then the **extended catalog**
@@ -108,13 +110,16 @@ Resolves against the **core catalog** (adapters) then the **extended catalog**
 ### `ronin update`
 
 ```
-ronin update                 # check, then prompt to update all outdated
+ronin update                 # check → summary → prompt to update outdated,
+                             #   then prompt to install missing tools
 ronin update tools           # just print the currency table (no changes)
 ronin update nuclei httpx    # update specific tools
-ronin update --all -y        # update every outdated tool, no prompt
-ronin update --offline       # use the cached check
+ronin update --all -y        # update outdated + install missing, no prompts
+ronin update --no-missing    # skip the "install missing" offer
+ronin update --offline       # prefer the cached check
 ```
-`nuclei` also triggers `-update-templates`.
+`nuclei` also triggers `-update-templates`. To only install missing tools without
+touching updates: `ronin add --missing`.
 
 ### `ronin sync`
 

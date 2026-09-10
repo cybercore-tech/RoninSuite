@@ -410,15 +410,35 @@ def doctor(
 def add(
     tools: list[str] = typer.Argument(None, help="tool name(s) to install"),
     list_: bool = typer.Option(False, "--list", help="list what's addable"),
+    missing: bool = typer.Option(False, "--missing",
+                                 help="install every not-installed tool with a RoninSuite adapter"),
+    extended: bool = typer.Option(False, "--extended",
+                                  help="with --missing: also install the extended catalog"),
     category: str = typer.Option("", help="filter --list by category"),
     search: str = typer.Option("", help="filter --list by text"),
+    yes: bool = typer.Option(False, "--yes", "-y", help="don't prompt for --missing"),
     dry_run: bool = typer.Option(False, help="print commands without running them"),
 ):
     """Install pentest tool(s) from the core or extended (awesome-list) catalog."""
     from ronin.data.extended_tools import EXTENDED, categories
     from ronin.doctor import catalog_lookup
     from ronin.doctor import install as do_install
+    from ronin.doctor import survey
     from ronin.tools.registry import CATALOG
+
+    if missing and not tools:
+        rows = [s for s in survey(include_extended=extended) if not s.installed]
+        names = [s.name for s in rows]
+        if not names:
+            con.print("[green]nothing missing[/green]")
+            return
+        con.print(f"[bold]{len(names)} missing:[/bold] {', '.join(names[:14])}"
+                  + (" …" if len(names) > 14 else ""))
+        if not yes and not dry_run:
+            typer.confirm("install all of these? (sudo/yay may prompt)", abort=True)
+        for n, o in do_install(names, dry_run=dry_run).items():
+            _outcome(n, o)
+        return
 
     if list_ or not tools:
         t = _table("tool", "category", "src", "installed", "description",
@@ -448,31 +468,71 @@ def add(
         raise typer.Exit(1)
     con.print(f"[bold]installing:[/bold] {', '.join(tools)}  (sudo/yay may prompt)")
     for n, o in do_install(list(tools), dry_run=dry_run).items():
-        c = "green" if o in ("installed",) or "already" in o or "cloned" in o else "yellow"
-        con.print(f"  [{c}]{n}: {o}[/{c}]")
+        _outcome(n, o)
 
 
 @app.command()
 def update(
     tools: list[str] = typer.Argument(None, help="tool(s) to update; 'tools' = just show the table"),
-    all_: bool = typer.Option(False, "--all", help="update every outdated tool"),
+    all_: bool = typer.Option(False, "--all", help="act on everything, no prompts"),
+    missing: bool = typer.Option(True, "--missing/--no-missing",
+                                 help="also offer to install missing tools"),
     yes: bool = typer.Option(False, "--yes", "-y", help="don't prompt"),
     offline: bool = typer.Option(False, help="use the cached check, no network"),
     dry_run: bool = typer.Option(False, help="print commands without running them"),
 ):
-    """Update outdated tools.  `ronin update tools` shows the currency table."""
+    """Update outdated tools, and offer to install missing ones.
+
+    `ronin update tools` just shows the currency table.
+    `ronin update nuclei httpx` updates those.  `ronin update --all -y` does the lot.
+    """
     from ronin import updates as up
+    from ronin.doctor import install as do_install
     from ronin.doctor import update as do_update
 
     tools = list(tools or [])
-    show_only = tools == ["tools"]
-    names = [] if show_only else tools
-
     rep = up.cached() if offline else up.check(online=True)
     if rep is None:
-        rep = up.check(online=not offline)
+        rep = up.check(online=False)   # no cache yet -> local-only survey
 
-    if show_only or not names:
+    if tools == ["tools"]:
+        _print_currency(rep)
+        return
+    auto = yes or all_
+
+    # explicit list -> just update those
+    if tools:
+        for n, o in do_update(tools, dry_run=dry_run).items():
+            _outcome(n, o)
+        return
+
+    _print_currency(rep, summary_only=True)
+
+    # 1) update outdated
+    if rep.outdated:
+        names = [x.name for x in rep.outdated]
+        con.print(f"[yellow]{len(names)} outdated:[/yellow] {', '.join(names)}")
+        if auto or (not dry_run and typer.confirm("  update them now?")):
+            for n, o in do_update(names, dry_run=dry_run).items():
+                _outcome(n, o)
+    else:
+        con.print("[green]all installed tools are current[/green]")
+
+    # 2) install missing
+    miss = [x.name for x in rep.missing]
+    if miss and missing:
+        con.print(f"\n[yellow]{len(miss)} not installed:[/yellow] {', '.join(miss[:12])}"
+                  + (" …" if len(miss) > 12 else ""))
+        if auto or (not dry_run and typer.confirm("  install the missing tools now?")):
+            for n, o in do_install(miss, dry_run=dry_run).items():
+                _outcome(n, o)
+        else:
+            con.print("  [dim]later:[/dim] [cyan]ronin add --missing[/cyan]  "
+                      "[dim]or[/dim] [cyan]ronin add <name> …[/cyan]")
+
+
+def _print_currency(rep, summary_only: bool = False):
+    if not summary_only:
         t = _table("tool", "cat", "installed", "latest", "src", "status", title="toolchain currency")
         for x in rep.tools:
             t.add_row(x.name, x.category,
@@ -480,26 +540,16 @@ def update(
                       x.latest_version or "-", x.source,
                       f"[{_ST_COL.get(x.status,'dim')}]{x.status}[/]")
         con.print(t)
-        con.print(f"checked {rep.checked_at:%Y-%m-%d %H:%M}Z  ·  pacman: {len(rep.pacman_updates)}"
-                  f"  ·  nuclei templates: "
-                  f"{rep.nuclei_templates_age_days if rep.nuclei_templates_age_days is not None else '?'}d old")
-        if show_only:
-            return
-        names = [x.name for x in rep.outdated] or ([] if not all_ else [])
-        if not names:
-            con.print("[green]everything current[/green]")
-            return
+    con.print(f"checked {rep.checked_at:%Y-%m-%d %H:%M}Z  ·  "
+              f"[yellow]{len(rep.outdated)}[/yellow] outdated · "
+              f"[yellow]{len(rep.missing)}[/yellow] missing · "
+              f"pacman: {len(rep.pacman_updates)} · nuclei templates: "
+              f"{rep.nuclei_templates_age_days if rep.nuclei_templates_age_days is not None else '?'}d old")
 
-    if all_ and not names:
-        names = [x.name for x in rep.outdated]
-    if not names:
-        con.print("[green]nothing to update[/green]")
-        return
-    if not yes and not dry_run:
-        typer.confirm(f"update {', '.join(names)}?", abort=True)
-    for n, o in do_update(names, dry_run=dry_run).items():
-        c = "green" if o in ("updated", "refreshed") else "yellow"
-        con.print(f"  [{c}]{n}: {o}[/{c}]")
+
+def _outcome(name: str, out: str):
+    good = out in ("installed", "updated", "refreshed") or "already" in out or "cloned" in out
+    con.print(f"  [{'green' if good else 'yellow'}]{name}: {out}[/]")
 
 
 @app.command()
