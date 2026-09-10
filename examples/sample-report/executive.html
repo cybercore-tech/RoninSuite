@@ -1,0 +1,223 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Acme Widgets LLC - Executive Report</title>
+<style>
+  :root {
+    --fg:#1a1a1a; --bg:#ffffff; --muted:#5b6570; --rule:#d8dee4;
+    --crit:#7d1128; --high:#c02a1b; --med:#b7791f; --low:#2b6cb0; --info:#4a5568;
+    --accent:#0aa1dd;
+  }
+  @media print { a { color: inherit; text-decoration: none; } body { font-size: 10.5pt; } }
+  * { box-sizing: border-box; }
+  body {
+    font: 15px/1.62 -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    color: var(--fg); background: var(--bg); margin: 0;
+    padding: 2.4rem clamp(1rem, 5vw, 4rem);
+    max-width: 60rem; margin-inline: auto;
+  }
+  .brandbar {
+    display: flex; align-items: center; gap: 1rem;
+    border-bottom: 2px solid var(--accent); padding-bottom: .8rem; margin-bottom: 1.6rem;
+  }
+  .brandbar img { max-height: 44px; width: auto; }
+  .brandbar .co { font-weight: 700; font-size: 1.05rem; }
+  .brandbar .tag { color: var(--muted); font-size: .85rem; }
+  .brandbar .cls {
+    margin-left: auto; font-size: .7rem; letter-spacing: .12em; font-weight: 700;
+    color: var(--crit); border: 1px solid var(--crit); border-radius: 4px; padding: .15rem .5rem;
+  }
+  h1, h2, h3, h4 { line-height: 1.25; font-weight: 650; }
+  h1 { font-size: 1.9rem; border-bottom: 3px solid var(--accent); padding-bottom: .4rem; }
+  h2 { font-size: 1.35rem; margin-top: 2.4rem; border-bottom: 1px solid var(--rule); padding-bottom: .25rem; }
+  h3 { font-size: 1.08rem; margin-top: 1.8rem; }
+  h4 { font-size: .98rem; color: var(--muted); }
+  code, pre { font-family: "SFMono-Regular", "JetBrains Mono", Consolas, monospace; font-size: .86em; }
+  pre {
+    background: #f6f8fa; border: 1px solid var(--rule); border-radius: 6px;
+    padding: .8rem 1rem; overflow-x: auto; white-space: pre-wrap; word-break: break-word;
+  }
+  code { background: #f0f2f4; padding: .1em .35em; border-radius: 4px; }
+  pre code { background: none; padding: 0; }
+  table { border-collapse: collapse; width: 100%; margin: 1rem 0; font-size: .92em; }
+  th, td { border: 1px solid var(--rule); padding: .45rem .6rem; text-align: left; vertical-align: top; }
+  th { background: #f4f6f8; font-weight: 600; }
+  blockquote {
+    margin: 1rem 0; padding: .4rem 1rem; border-left: 3px solid var(--accent);
+    background: #faf5ff; color: #44337a;
+  }
+  a { color: var(--low); }
+  .toc { background: #f6f8fa; border: 1px solid var(--rule); border-radius: 6px; padding: .5rem 1rem; }
+  hr { border: none; border-top: 1px solid var(--rule); margin: 2rem 0; }
+  footer { margin-top: 3rem; padding-top: 1rem; border-top: 1px solid var(--rule);
+           color: var(--muted); font-size: .8rem; }
+</style>
+</head>
+<body>
+<div class="brandbar">
+  <div>
+<div class="co">Ronin Security Consulting</div><div class="tag">Offensive security assessments</div>  </div>
+<div class="cls">CONFIDENTIAL</div></div>
+<h1 id="acme-widgets-llc-executive-summary">Acme Widgets LLC — Executive Summary</h1>
+<table>
+<thead>
+<tr>
+<th></th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Prepared by</strong></td>
+<td>Ronin Security Consulting — CONFIDENTIAL</td>
+</tr>
+<tr>
+<td><strong>Engagement</strong></td>
+<td><code>acme-ext-2026q3</code></td>
+</tr>
+<tr>
+<td><strong>Client</strong></td>
+<td>Acme Widgets LLC</td>
+</tr>
+<tr>
+<td><strong>Tester</strong></td>
+<td>raven</td>
+</tr>
+<tr>
+<td><strong>Authorized by</strong></td>
+<td>J. Okafor, CTO</td>
+</tr>
+<tr>
+<td><strong>Testing window</strong></td>
+<td>2026-09-01 to 2026-09-30</td>
+</tr>
+<tr>
+<td><strong>Report generated</strong></td>
+<td>2026-09-09 23:46</td>
+</tr>
+<tr>
+<td><strong>Overall risk rating</strong></td>
+<td><strong>Critical</strong></td>
+</tr>
+<tr>
+<td><strong>Findings</strong></td>
+<td>9 total — 2 critical, 2 high, 1 medium, 2 low, 2 info</td>
+</tr>
+</tbody>
+</table>
+<p><em>Prepared by Ronin Security Consulting under NDA. Client distribution only.</em></p>
+<hr />
+<h2 id="overview">Overview</h2>
+<p>This report presents the results of an authorised offensive security assessment
+of Acme Widgets LLC's in-scope assets. The engagement's objective was
+to identify, from the perspective of a real attacker, weaknesses that could lead
+to unauthorised access, disclosure of sensitive data, or disruption of service —
+and to give management a clear, prioritised path to closing them.</p>
+<p><strong>Overall risk rating: Critical.</strong>
+Critical issues were identified that require immediate attention.</p>
+<h2 id="1-scope-methodology">1. Scope &amp; Methodology</h2>
+<h3 id="11-scope">1.1 Scope</h3>
+<p><strong>In scope</strong></p>
+<ul>
+<li><code>*.acme.example</code></li>
+<li><code>203.0.113.0/28</code></li>
+</ul>
+<p><strong>Explicitly out of scope</strong></p>
+<ul>
+<li><code>mail.acme.example</code></li>
+</ul>
+<p>Testing window: 2026-09-01 to 2026-09-30.</p>
+<p><strong>Rules of engagement</strong></p>
+<blockquote>
+<p>External black-box. No DoS. No social engineering. Credential attacks only
+outside 09:00-17:00 local. Report any pre-existing compromise immediately.</p>
+</blockquote>
+<h3 id="12-methodology">1.2 Methodology</h3>
+<p>Testing followed an industry-standard workflow — reconnaissance, service
+enumeration, automated and manual vulnerability analysis, and controlled
+validation of exploitable issues — aligned with the PTES and the OWASP Testing
+Guide. Assessment activity used the tools listed below against the in-scope
+assets only. No denial-of-service testing was performed.</p>
+<p>Tools used: subfinder, naabu, nmap, nuclei, feroxbuster, sqlmap, nikto.</p>
+<hr />
+<h2 id="2-vulnerability-details-the-findings">2. Vulnerability Details — The Findings</h2>
+<p>The assessment identified <strong>7 actionable issue(s)</strong>
+across 2 in-scope target group(s). The table below
+summarises them by business risk; technical detail is in the Engineer-level
+report.</p>
+<table>
+<thead>
+<tr>
+<th>Risk</th>
+<th>Count</th>
+<th>What it means for the business</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>CRITICAL</td>
+<td>2</td>
+<td>Immediate threat — an attacker can take over systems or data now.</td>
+</tr>
+<tr>
+<td>HIGH</td>
+<td>2</td>
+<td>Serious — likely exploited by a motivated attacker in a short timeframe.</td>
+</tr>
+<tr>
+<td>MEDIUM</td>
+<td>1</td>
+<td>Meaningful — enables an attacker who has an initial foothold to progress.</td>
+</tr>
+<tr>
+<td>LOW</td>
+<td>2</td>
+<td>Minor — hardening gaps that reduce defence-in-depth.</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Headline issues</strong></p>
+<ol>
+<li><strong>SQL injection in GET parameter 'id' (MySQL)</strong> — affects <code>https://app.acme.example/item?id=1</code>. CVSS 9.8. sqlmap confirmed boolean-based and UNION SQL injection via the id parameter; back-end is MySQL 8.0.</li>
+<li><strong>Apache 2.4.49 Path Traversal / RCE (CVE-2021-42013)</strong> — affects <code>https://app.acme.example</code>. CVSS 9.8. Apache httpd 2.4.49/2.4.50 unauthenticated path traversal; with mod_cgi enabled this is remote code execution.</li>
+<li><strong>Open port 6379/tcp - Redis (internet-facing)</strong> — affects <code>203.0.113.10:6379/tcp</code>. naabu found Redis exposed on the perimeter address</li>
+<li><strong>nikto: Shellshock RCE may be possible via /cgi-bin/status.cgi</strong> — affects <code>https://legacy.acme.example/cgi-bin/status.cgi</code>. nikto flagged a CGI endpoint potentially vulnerable to Shellshock (CVE-2014-6271).</li>
+</ol>
+<hr />
+<h2 id="3-proof-of-concept-poc-attack-paths">3. Proof of Concept (PoC) &amp; Attack Paths</h2>
+<p>The following plausible attack chains were identified. Each assumes a remote,
+unauthenticated attacker unless stated. Full reproduction steps are held in the
+Engineer-level report and are available to your technical team on request.</p>
+<ul>
+<li><strong>SQL injection in GET parameter 'id' (MySQL)</strong> (<code>https://app.acme.example/item?id=1</code>): Full DB read: dump customers + password hashes -&gt; offline crack -&gt; account takeover / admin. Stacked queries may allow RCE on the DB host.</li>
+<li><strong>Apache 2.4.49 Path Traversal / RCE (CVE-2021-42013)</strong> (<code>https://app.acme.example</code>): Unauthenticated RCE as the web user -&gt; pivot into 203.0.113.0/28. Public exploit exists.</li>
+<li><strong>Open port 6379/tcp - Redis (internet-facing)</strong> (<code>203.0.113.10:6379/tcp</code>): Unauthenticated Redis -&gt; read/alter cached data, write a webshell or SSH key via CONFIG SET, or gain RCE on the Redis host.</li>
+<li><strong>nikto: Shellshock RCE may be possible via /cgi-bin/status.cgi</strong> (<code>https://legacy.acme.example/cgi-bin/status.cgi</code>): If confirmed, unauthenticated RCE on a legacy host - likely an unmonitored pivot point.</li>
+<li><strong>Exposed Git repository at /.git/</strong> (<code>https://app.acme.example/.git/HEAD</code>): Reconstruct source + committed secrets -&gt; authenticated access / more vulns.</li>
+</ul>
+<hr />
+<h2 id="4-remediation-recommendations">4. Remediation Recommendations</h2>
+<p>Recommended strategic priorities, in order:</p>
+<ol>
+<li><strong>Stop the bleeding (0–30 days).</strong> Remediate all critical and high findings;
+   4 item(s). These
+   are the issues an attacker would use first.</li>
+<li><strong>Reduce attack surface (30–90 days).</strong> Address medium findings
+   (1 item(s)) and remove exposed services that
+   are not business-critical.</li>
+<li><strong>Harden and verify (90–180 days).</strong> Close low-severity hygiene gaps, then
+   commission a focused retest to confirm closure.</li>
+<li><strong>Sustain.</strong> Fold recurring checks (TLS config, security headers, exposed
+   admin interfaces, patch currency) into a quarterly cadence.</li>
+</ol>
+<p>Indicative timelines assume normal change-management capacity; critical items
+should be expedited.</p>
+<hr />
+<h2 id="assurance-limitations">Assurance &amp; Limitations</h2>
+<p>This assessment reflects the state of the in-scope systems during the testing
+window only and is not a guarantee that no other vulnerabilities exist. Testing
+was time-boxed and non-destructive. A follow-up retest is recommended once
+remediation is complete to formally confirm closure.</p>
+<footer>Prepared by Ronin Security Consulting under NDA. Client distribution only.</footer></body>
+</html>

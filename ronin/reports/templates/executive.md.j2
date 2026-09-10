@@ -1,0 +1,37 @@
+{% import '_macros.md.j2' as s %}
+{{ s.header(ctx, 'Executive Summary') }}
+
+## Overview
+
+This report presents the results of an authorised offensive security assessment
+of {{ ctx.engagement.client }}'s in-scope assets. The engagement's objective was
+to identify, from the perspective of a real attacker, weaknesses that could lead
+to unauthorised access, disclosure of sensitive data, or disruption of service —
+and to give management a clear, prioritised path to closing them.
+
+**Overall risk rating: {{ ctx.risk_rating }}.**
+{% if ctx.counts.get('critical') %}
+Critical issues were identified that require immediate attention.
+{% elif ctx.counts.get('high') %}
+No critical issues were found, but one or more high-risk issues should be
+remediated on a short timeline.
+{% elif ctx.actionable() | length %}
+No critical or high-risk issues were found. The identified items are best treated
+as hardening improvements.
+{% else %}
+No exploitable issues were identified within scope during the testing window.
+{% endif %}
+
+{{ s.scope_and_methodology(ctx, 'executive') }}
+{{ s.vuln_details(ctx, 'executive') }}
+{{ s.poc_and_paths(ctx, 'executive') }}
+{{ s.remediation(ctx, 'executive') }}
+
+---
+
+## Assurance & Limitations
+
+This assessment reflects the state of the in-scope systems during the testing
+window only and is not a guarantee that no other vulnerabilities exist. Testing
+was time-boxed and non-destructive. A follow-up retest is recommended once
+remediation is complete to formally confirm closure.

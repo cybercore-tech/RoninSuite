@@ -1,0 +1,88 @@
+Screen {
+    background: $surface;
+}
+
+#hint, #cat-eng, #find-head, #run-title {
+    padding: 0 1;
+    color: $text-muted;
+}
+
+DataTable {
+    height: 1fr;
+}
+
+#scope-status {
+    padding: 0 1;
+    height: auto;
+}
+
+#cfg {
+    padding: 1 2;
+}
+
+#cfg Input, #cfg Select {
+    margin-bottom: 1;
+}
+
+#cfg-buttons, #run-buttons, #modal-buttons {
+    height: auto;
+    padding-top: 1;
+}
+
+#cfg-buttons Button, #run-buttons Button, #modal-buttons Button {
+    margin-right: 2;
+}
+
+#log, #rep-log {
+    height: 1fr;
+    border: round $primary;
+    background: $panel;
+}
+
+#run-status {
+    padding: 0 1;
+    height: auto;
+}
+
+NewEngagementModal {
+    align: center middle;
+}
+
+#modal {
+    width: 60;
+    height: auto;
+    padding: 1 2;
+    background: $panel;
+    border: thick $primary;
+}
+
+#modal-title {
+    text-style: bold;
+    margin-bottom: 1;
+}
+
+#modal Input {
+    margin-bottom: 1;
+}
+
+FindingDetail {
+    align: center middle;
+}
+
+#modal-wide {
+    width: 90%;
+    max-width: 120;
+    height: 80%;
+    padding: 1 2;
+    background: $panel;
+    border: thick $primary;
+}
+
+#rep-opts {
+    height: auto;
+    padding: 1 2;
+}
+
+#rep-opts Checkbox {
+    height: auto;
+}

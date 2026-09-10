@@ -1,0 +1,29 @@
+{% import '_macros.md.j2' as s %}
+{{ s.header(ctx, 'Remediation / Action Plan') }}
+
+## Purpose
+
+A strategic-level plan for closing the findings from this engagement. It maps
+each issue to a concrete action, an effort estimate, a suggested SLA, and an
+owner field for your team to assign. Use it to drive remediation tracking and to
+scope a verification retest.
+
+{{ s.scope_and_methodology(ctx, 'remediation') }}
+{{ s.vuln_details(ctx, 'remediation') }}
+{{ s.poc_and_paths(ctx, 'remediation') }}
+{{ s.remediation(ctx, 'remediation') }}
+
+---
+
+## Tracking
+
+| State | Definition |
+|---|---|
+| Open | Not yet started. |
+| In progress | Fix under development or scheduled in a change window. |
+| Fixed (unverified) | Change deployed; awaiting retest. |
+| Closed | Retest confirms the originating check no longer fires. |
+| Risk accepted | Client has formally accepted the residual risk (record who/when). |
+
+Recommended: re-run RoninSuite against each asset after remediation and diff the
+findings, then commission a formal retest for anything rated High or above.

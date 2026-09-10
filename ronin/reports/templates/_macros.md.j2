@@ -1,0 +1,264 @@
+{#- Shared section macros. `level` in {executive, technical, remediation} controls depth. -#}
+
+{%- macro header(ctx, title) -%}
+# {{ ctx.engagement.client }} — {{ title }}
+
+| | |
+|---|---|
+{% if ctx.brand and ctx.brand.company %}| **Prepared by** | {{ ctx.brand.company }}{% if ctx.brand.classification %} — {{ ctx.brand.classification }}{% endif %} |
+{% endif %}| **Engagement** | `{{ ctx.engagement.slug }}` |
+| **Client** | {{ ctx.engagement.client }} |
+| **Tester** | {{ ctx.engagement.tester }} |
+{% if ctx.scope and ctx.scope.authorized_by %}| **Authorized by** | {{ ctx.scope.authorized_by }} |
+{% endif %}| **Testing window** | {{ ctx.window }} |
+| **Report generated** | {{ ctx.generated }} |
+| **Overall risk rating** | **{{ ctx.risk_rating }}** |
+| **Findings** | {{ ctx.total }} total — {{ ctx.counts.get('critical',0) }} critical, {{ ctx.counts.get('high',0) }} high, {{ ctx.counts.get('medium',0) }} medium, {{ ctx.counts.get('low',0) }} low, {{ ctx.counts.get('info',0) }} info |
+
+*{{ (ctx.brand.footer if ctx.brand and ctx.brand.footer else "Prepared with RoninSuite. This document contains sensitive security information — handle per the engagement NDA.") }}*
+
+---
+{%- endmacro -%}
+
+
+{%- macro scope_and_methodology(ctx, level) -%}
+## 1. Scope & Methodology
+
+### 1.1 Scope
+
+{% if ctx.scope_targets %}
+**In scope**
+
+{% for t in ctx.scope_targets %}- `{{ t }}`
+{% endfor %}
+{% else %}
+_No scope file recorded for this engagement._
+{% endif %}
+{% if ctx.out_of_scope %}
+
+**Explicitly out of scope**
+
+{% for t in ctx.out_of_scope %}- `{{ t }}`
+{% endfor %}
+{% endif %}
+
+Testing window: {{ ctx.window }}.
+{% if ctx.roe %}
+
+**Rules of engagement**
+
+> {{ ctx.roe.strip() | replace('\n', '\n> ') }}
+{% endif %}
+
+### 1.2 Methodology
+
+{% if level == 'executive' %}
+Testing followed an industry-standard workflow — reconnaissance, service
+enumeration, automated and manual vulnerability analysis, and controlled
+validation of exploitable issues — aligned with the PTES and the OWASP Testing
+Guide. Assessment activity used the tools listed below against the in-scope
+assets only. No denial-of-service testing was performed.
+
+{% set tools = ctx.method | map(attribute='tool') | unique | list %}
+Tools used: {{ tools | join(', ') if tools else 'n/a' }}.
+{% elif level == 'remediation' %}
+Findings below were produced by: {{ ctx.method | map(attribute='tool') | unique | join(', ') }}.
+Full commands and raw evidence are in the Technical Report and the engagement
+evidence folder.
+{% else %}
+Each step below was executed from the tester's host against in-scope targets.
+Raw output for every run is retained under `engagements/{{ ctx.engagement.slug }}/evidence/`.
+
+| # | Tool | Target | Started | Duration | Status | Findings |
+|---|------|--------|---------|----------|--------|----------|
+{% for m in ctx.method %}| {{ loop.index }} | {{ m.tool }} | `{{ m.target }}` | {{ m.started }} | {{ m.duration }} | {{ m.status }} | {{ m.findings }} |
+{% endfor %}
+
+**Exact commands**
+
+{% for m in ctx.method %}
+```
+{{ m.command }}
+```
+{% endfor %}
+{% endif %}
+
+---
+{%- endmacro -%}
+
+
+{%- macro vuln_details(ctx, level) -%}
+## 2. Vulnerability Details — The Findings
+
+{% if ctx.total == 0 %}
+No findings were recorded for this engagement.
+{% elif level == 'executive' %}
+The assessment identified **{{ ctx.actionable() | length }} actionable issue(s)**
+across {{ ctx.scope_targets | length }} in-scope target group(s). The table below
+summarises them by business risk; technical detail is in the Engineer-level
+report.
+
+| Risk | Count | What it means for the business |
+|---|---|---|
+{% for sev, blurb in [
+   ('critical','Immediate threat — an attacker can take over systems or data now.'),
+   ('high','Serious — likely exploited by a motivated attacker in a short timeframe.'),
+   ('medium','Meaningful — enables an attacker who has an initial foothold to progress.'),
+   ('low','Minor — hardening gaps that reduce defence-in-depth.'),
+] %}
+{% if ctx.counts.get(sev,0) %}| {{ sev|upper }} | {{ ctx.counts.get(sev,0) }} | {{ blurb }} |
+{% endif %}
+{% endfor %}
+
+**Headline issues**
+
+{% for f in ctx.by_sev('critical','high')[:5] %}
+{{ loop.index }}. **{{ f.title }}** — affects `{{ f.target }}`.{% if f.cvss_score %} CVSS {{ '%.1f'|format(f.cvss_score) }}.{% endif %} {{ (f.description.split('. ')[0]) | truncate(180) }}
+{% else %}
+_No critical or high-risk issues were identified._
+{% endfor %}
+{% elif level == 'remediation' %}
+Condensed for planning. One row per issue, ordered by priority. Full technical
+write-ups are in the Engineer-level report.
+
+| # | Finding | Risk | CVSS | Affected asset(s) | Confidence |
+|---|---------|------|------|-------------------|------------|
+{% for f in ctx.actionable() %}| {{ loop.index }} | {{ f.title }} | {{ f.severity.value|upper }} | {{ '%.1f'|format(f.cvss_score) if f.cvss_score else '—' }} | `{{ f.target }}` | {{ f.confidence }} |
+{% endfor %}
+{% else %}
+{{ ctx.total }} findings, ordered by severity then CVSS. Informational items are
+inventory/context and are retained for completeness.
+
+{% for f in ctx.findings %}
+### 2.{{ loop.index }} {{ f.title }}
+
+| | |
+|---|---|
+| **Severity** | {{ f.severity.value | upper }} |
+| **CVSS v3.1** | {% if f.cvss_score %}{{ '%.1f'|format(f.cvss_score) }}{% if f.cvss_vector %} (`{{ f.cvss_vector }}`){% endif %}{% else %}not scored{% endif %} |
+| **Affected** | `{{ f.target }}` |
+| **Source / confidence** | {{ f.tool }} / {{ f.confidence }} |
+{% if f.cve %}| **CVE** | {{ f.cve | join(', ') }} |
+{% endif %}{% if f.cwe %}| **CWE** | {{ f.cwe | join(', ') }} |
+{% endif %}{% if f.tags %}| **Tags** | {{ f.tags | reject('equalto','') | join(', ') }} |
+{% endif %}
+
+{{ f.description }}
+
+{% if f.evidence %}
+**Evidence**
+
+```
+{{ f.evidence | truncate(3000, true) }}
+```
+{% endif %}
+{% if f.request %}
+**Request**
+
+```http
+{{ f.request | truncate(2500, true) }}
+```
+{% endif %}
+{% if f.response %}
+**Response (truncated)**
+
+```http
+{{ f.response | truncate(2500, true) }}
+```
+{% endif %}
+
+{% endfor %}
+{% endif %}
+
+---
+{%- endmacro -%}
+
+
+{%- macro poc_and_paths(ctx, level) -%}
+## 3. Proof of Concept (PoC) & Attack Paths
+
+{% set items = ctx.by_sev('critical','high','medium') %}
+{% if not items %}
+No exploitable attack paths were demonstrated. Lower-severity items are
+defence-in-depth gaps rather than direct paths to impact.
+{% elif level == 'executive' %}
+The following plausible attack chains were identified. Each assumes a remote,
+unauthenticated attacker unless stated. Full reproduction steps are held in the
+Engineer-level report and are available to your technical team on request.
+
+{% for f in items[:6] %}
+- **{{ f.title }}** (`{{ f.target }}`): {{ f.attack_path or 'Can be leveraged to advance an attack against this asset.' }}
+{% endfor %}
+{% else %}
+{% for f in items %}
+### 3.{{ loop.index }} {{ f.title }} — `{{ f.target }}`
+
+**Attack path.** {{ f.attack_path or 'Chains toward greater impact when combined with other findings on the same asset.' }}
+
+{% if level == 'technical' %}
+**Reproduce.**
+
+```bash
+{{ f.poc or '# see Evidence in section 2' }}
+```
+{% else %}
+**Break the chain here:** {{ f.remediation | truncate(200) }}
+{% endif %}
+
+{% endfor %}
+{% endif %}
+
+---
+{%- endmacro -%}
+
+
+{%- macro remediation(ctx, level) -%}
+## 4. Remediation Recommendations
+
+{% if ctx.actionable() | length == 0 %}
+No remediation actions are required beyond routine patching and monitoring.
+{% elif level == 'executive' %}
+Recommended strategic priorities, in order:
+
+{% if ctx.counts.get('critical') or ctx.counts.get('high') %}
+1. **Stop the bleeding (0–30 days).** Remediate all critical and high findings;
+   {{ (ctx.counts.get('critical',0) + ctx.counts.get('high',0)) }} item(s). These
+   are the issues an attacker would use first.
+{% endif %}
+2. **Reduce attack surface (30–90 days).** Address medium findings
+   ({{ ctx.counts.get('medium',0) }} item(s)) and remove exposed services that
+   are not business-critical.
+3. **Harden and verify (90–180 days).** Close low-severity hygiene gaps, then
+   commission a focused retest to confirm closure.
+4. **Sustain.** Fold recurring checks (TLS config, security headers, exposed
+   admin interfaces, patch currency) into a quarterly cadence.
+
+Indicative timelines assume normal change-management capacity; critical items
+should be expedited.
+{% elif level == 'remediation' %}
+Prioritised action plan. Suggested SLA is measured from report delivery.
+
+| # | Action | Risk | CVSS | Asset(s) | Effort | Suggested SLA | Owner |
+|---|--------|------|------|----------|--------|---------------|-------|
+{% for f in ctx.actionable() %}| {{ loop.index }} | {{ f.remediation | truncate(160) or f.title }} | {{ f.severity.value|upper }} | {{ '%.1f'|format(f.cvss_score) if f.cvss_score else '—' }} | `{{ f.target }}` | {{ ctx.effort(f) }} | {% set d = ctx.sla_days(f.severity.value) %}{{ (d ~ ' days') if d else 'best effort' }} | _assign_ |
+{% endfor %}
+
+**Verification.** Re-run the originating tool against each asset after the fix
+(`ronin run <tool> --engagement {{ ctx.engagement.slug }} --target <asset>`), or
+commission a retest. A finding is closed only when the check no longer fires.
+{% else %}
+Per-finding remediation. Items are ordered by severity.
+
+{% for f in ctx.actionable() %}
+### 4.{{ loop.index }} {{ f.title }}
+
+- **Asset(s):** `{{ f.target }}`
+- **Risk:** {{ f.severity.value | upper }}{% if f.cvss_score %} (CVSS {{ '%.1f'|format(f.cvss_score) }}){% endif %}
+- **Fix:** {{ f.remediation }}
+- **Effort:** {{ ctx.effort(f) }} &nbsp;•&nbsp; **Suggested SLA:** {% set d = ctx.sla_days(f.severity.value) %}{{ (d ~ ' days') if d else 'best effort' }}
+{% if f.references %}- **References:** {{ f.references | join(' , ') }}
+{% endif %}
+
+{% endfor %}
+{% endif %}
+{%- endmacro -%}

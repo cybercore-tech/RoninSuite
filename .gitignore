@@ -1,0 +1,16 @@
+__pycache__/
+*.pyc
+.venv/
+*.egg-info/
+.pytest_cache/
+.uv-sync.log
+
+# runtime data - never commit engagement output (root-anchored so ronin/reports/ is kept)
+/engagements/
+/reports/
+/ronin.db
+/ronin.db-*
+/audit.log
+/.cache/
+.env
+/brand.yaml

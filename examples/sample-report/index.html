@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Acme Widgets LLC - RoninSuite reports</title>
+<style>
+  :root {
+    --fg:#1a1a1a; --bg:#ffffff; --muted:#5b6570; --rule:#d8dee4;
+    --crit:#7d1128; --high:#c02a1b; --med:#b7791f; --low:#2b6cb0; --info:#4a5568;
+    --accent:#0aa1dd;
+  }
+  @media print { a { color: inherit; text-decoration: none; } body { font-size: 10.5pt; } }
+  * { box-sizing: border-box; }
+  body {
+    font: 15px/1.62 -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    color: var(--fg); background: var(--bg); margin: 0;
+    padding: 2.4rem clamp(1rem, 5vw, 4rem);
+    max-width: 60rem; margin-inline: auto;
+  }
+  .brandbar {
+    display: flex; align-items: center; gap: 1rem;
+    border-bottom: 2px solid var(--accent); padding-bottom: .8rem; margin-bottom: 1.6rem;
+  }
+  .brandbar img { max-height: 44px; width: auto; }
+  .brandbar .co { font-weight: 700; font-size: 1.05rem; }
+  .brandbar .tag { color: var(--muted); font-size: .85rem; }
+  .brandbar .cls {
+    margin-left: auto; font-size: .7rem; letter-spacing: .12em; font-weight: 700;
+    color: var(--crit); border: 1px solid var(--crit); border-radius: 4px; padding: .15rem .5rem;
+  }
+  h1, h2, h3, h4 { line-height: 1.25; font-weight: 650; }
+  h1 { font-size: 1.9rem; border-bottom: 3px solid var(--accent); padding-bottom: .4rem; }
+  h2 { font-size: 1.35rem; margin-top: 2.4rem; border-bottom: 1px solid var(--rule); padding-bottom: .25rem; }
+  h3 { font-size: 1.08rem; margin-top: 1.8rem; }
+  h4 { font-size: .98rem; color: var(--muted); }
+  code, pre { font-family: "SFMono-Regular", "JetBrains Mono", Consolas, monospace; font-size: .86em; }
+  pre {
+    background: #f6f8fa; border: 1px solid var(--rule); border-radius: 6px;
+    padding: .8rem 1rem; overflow-x: auto; white-space: pre-wrap; word-break: break-word;
+  }
+  code { background: #f0f2f4; padding: .1em .35em; border-radius: 4px; }
+  pre code { background: none; padding: 0; }
+  table { border-collapse: collapse; width: 100%; margin: 1rem 0; font-size: .92em; }
+  th, td { border: 1px solid var(--rule); padding: .45rem .6rem; text-align: left; vertical-align: top; }
+  th { background: #f4f6f8; font-weight: 600; }
+  blockquote {
+    margin: 1rem 0; padding: .4rem 1rem; border-left: 3px solid var(--accent);
+    background: #faf5ff; color: #44337a;
+  }
+  a { color: var(--low); }
+  .toc { background: #f6f8fa; border: 1px solid var(--rule); border-radius: 6px; padding: .5rem 1rem; }
+  hr { border: none; border-top: 1px solid var(--rule); margin: 2rem 0; }
+  footer { margin-top: 3rem; padding-top: 1rem; border-top: 1px solid var(--rule);
+           color: var(--muted); font-size: .8rem; }
+</style>
+</head>
+<body>
+<div class="brandbar">
+  <div>
+<div class="co">Ronin Security Consulting</div><div class="tag">Offensive security assessments</div>  </div>
+<div class="cls">CONFIDENTIAL</div></div>
+<h1>Acme Widgets LLC</h1><p>Engagement <code>acme-ext-2026q3</code> &middot; generated 2026-09-09 23:46 &middot; risk rating <strong>Critical</strong> &middot; 9 findings</p><ul><li><strong>Executive</strong> &mdash; <a href="executive.md">MD</a> &middot; <a href="executive.html">HTML</a> &middot; <a href="executive.pdf">PDF</a></li><li><strong>Technical</strong> &mdash; <a href="technical.md">MD</a> &middot; <a href="technical.html">HTML</a> &middot; <a href="technical.pdf">PDF</a></li><li><strong>Remediation</strong> &mdash; <a href="remediation.md">MD</a> &middot; <a href="remediation.html">HTML</a> &middot; <a href="remediation.pdf">PDF</a></li></ul>
+<footer>Prepared by Ronin Security Consulting under NDA. Client distribution only.</footer></body>
+</html>

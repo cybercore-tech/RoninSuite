@@ -1,0 +1,4 @@
+{"type":"response","url":"https://app.acme.example/.git/HEAD","status":200,"content_length":23,"line_count":1,"word_count":2}
+{"type":"response","url":"https://app.acme.example/admin","status":401,"content_length":0,"line_count":0,"word_count":0}
+{"type":"response","url":"https://app.acme.example/images","status":301,"content_length":178,"line_count":8,"word_count":20}
+{"type":"statistics","status_200s":1}

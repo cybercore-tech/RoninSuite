@@ -1,0 +1,3 @@
+{"host":"www.acme.example","input":"acme.example","source":["crtsh","dnsdumpster"]}
+{"host":"staging.acme.example","input":"acme.example","source":["crtsh"]}
+{"host":"www.acme.example","input":"acme.example","source":["alienvault"]}

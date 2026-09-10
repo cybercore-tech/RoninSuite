@@ -1,0 +1,11 @@
+# RoninSuite report branding.  Copy to  brand.yaml  and edit.
+# Applies to every generated report (Markdown header + HTML/PDF brand bar).
+
+company: "Ronin Security Consulting"
+tagline: "Offensive security assessments"
+logo: "assets/logo.png"          # path relative to the project root; png/jpg/svg
+accent_color: "#b026ff"          # headings, rules, brand bar
+classification: "CONFIDENTIAL"    # shown top-right of every page; set "" to hide
+footer: >
+  Prepared by Ronin Security Consulting under NDA. Distribution limited to the
+  named client. Findings reflect the systems and testing window stated herein.

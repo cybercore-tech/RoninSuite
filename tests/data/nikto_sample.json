@@ -1,0 +1,5 @@
+{"host":"app.acme.example","ip":"203.0.113.10","port":"443","vulnerabilities":[
+ {"id":"999990","method":"GET","url":"/","msg":"The anti-clickjacking X-Frame-Options header is not present.","OSVDB":"0"},
+ {"id":"600056","method":"GET","url":"/admin/","msg":"Directory indexing found.","OSVDB":"3268"},
+ {"id":"400001","method":"GET","url":"/cgi-bin/test.cgi","msg":"Remote command execution may be possible via shellshock.","OSVDB":"112004","references":"https://nvd.nist.gov/vuln/detail/CVE-2014-6271"}
+]}

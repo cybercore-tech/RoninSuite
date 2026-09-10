@@ -1,0 +1,34 @@
+{% import '_macros.md.j2' as s %}
+{{ s.header(ctx, 'Technical Report') }}
+
+## Reading this report
+
+This is the engineer-level document. Every finding includes the affected asset,
+severity and CVSS v3.1 score/vector, the raw evidence, and — where the issue is
+exploitable — a copy-paste reproduction in section 3. Commands and raw tool
+output are reproduced verbatim so your team can validate each item independently.
+
+[TOC]
+
+{{ s.scope_and_methodology(ctx, 'technical') }}
+{{ s.vuln_details(ctx, 'technical') }}
+{{ s.poc_and_paths(ctx, 'technical') }}
+{{ s.remediation(ctx, 'technical') }}
+
+---
+
+## Appendix A — Evidence index
+
+Raw output for every run in this report is retained here:
+
+```
+engagements/{{ ctx.engagement.slug }}/evidence/<run-id>/
+    command.txt      exact argv
+    stdout.log       full stdout
+    stderr.log       full stderr
+    <tool>.<ext>     machine-readable result (xml / jsonl / json)
+    findings.json    normalized findings extracted from this run
+```
+
+Audit trail (scope decisions + every command) is in `audit.log` at the project
+root.
