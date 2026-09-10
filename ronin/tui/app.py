@@ -993,10 +993,20 @@ class MainScreen(Screen):
 
     def _refresh_active(self) -> None:
         try:
-            pane = self.query_one(TabbedContent).get_pane(
-                self.query_one(TabbedContent).active)
+            tc = self.query_one(TabbedContent)
+            pane = tc.get_pane(tc.active)
             for child in pane.walk_children(Pane):
                 child.refresh_data()
+            # move focus into the pane so its key bindings are live - prefer a
+            # DataTable, and never focus a hidden/disabled widget
+            focusables = [
+                w for w in pane.walk_children()
+                if getattr(w, "can_focus", False) and w.display and not w.disabled
+            ]
+            target = next((w for w in focusables if isinstance(w, DataTable)),
+                          focusables[0] if focusables else None)
+            if target is not None:
+                self.set_focus(target)
         except Exception:  # noqa: BLE001
             pass
 
