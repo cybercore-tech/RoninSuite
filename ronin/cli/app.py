@@ -20,6 +20,7 @@
 from __future__ import annotations
 
 import datetime as _dt
+import os
 import re
 import sys
 
@@ -696,22 +697,58 @@ def _outcome(name: str, out: str):
 
 
 @app.command()
-def sync(offline: bool = typer.Option(False, help="skip network, just re-read local state")):
-    """Refresh the update cache and nuclei templates."""
+def sync(
+    remote: str = typer.Option("", help="SubgridSec Deck base URL (persisted after first use)"),
+    token: str = typer.Option("", help="Deck API token (keep it in .env as RONIN_DECK_TOKEN)"),
+    remote_only: bool = typer.Option(False, help="skip the toolchain refresh"),
+    pull_only: bool = typer.Option(False, help="only pull customers from the Deck"),
+    push_only: bool = typer.Option(False, help="only push engagements/findings to the Deck"),
+    full: bool = typer.Option(False, help="pull every customer, ignore the last-pull cursor"),
+    offline: bool = typer.Option(False, help="skip network, just re-read local state"),
+):
+    """Refresh the toolchain, and (if a Deck is configured) sync clients + findings."""
     import shutil
 
     from ronin import updates as up
 
-    con.print("↻ checking toolchain currency…")
-    rep = up.check(online=not offline)
-    con.print(f"  {len(rep.outdated)} outdated · {len(rep.missing)} missing · "
-              f"pacman: {len(rep.pacman_updates)}")
-    if shutil.which("nuclei") and not offline:
-        con.print("↻ nuclei -update-templates…")
-        import subprocess
+    if not remote_only and not offline:
+        con.print("↻ checking toolchain currency…")
+        rep = up.check(online=True)
+        con.print(f"  {len(rep.outdated)} outdated · {len(rep.missing)} missing · "
+                  f"pacman: {len(rep.pacman_updates)}")
+        if shutil.which("nuclei"):
+            con.print("↻ nuclei -update-templates…")
+            import subprocess
 
-        subprocess.run(["nuclei", "-update-templates", "-silent"])
-    con.print("[green]sync complete[/green] — see `ronin update tools`")
+            subprocess.run(["nuclei", "-update-templates", "-silent"])
+
+    from ronin import sync_remote as sr
+
+    if remote or token or os.environ.get("RONIN_DECK_URL") or db.get_state("sync.deck_url", ""):
+        try:
+            base, tok = sr.resolve(remote or None, token or None)
+        except sr.DeckError as e:
+            err.print(f"[yellow]deck sync skipped:[/yellow] {e}")
+        else:
+            con.print(f"↻ deck: {base}")
+            try:
+                if not push_only:
+                    n = sr.pull_customers(base, tok, full=full)
+                    con.print(f"  pulled [green]{n}[/green] customer(s)")
+                if not pull_only:
+                    r = sr.push_all(base, tok)
+                    con.print(f"  pushed [green]{r.get('engagements_upserted',0)}[/green] engagements · "
+                              f"{r.get('findings_synced',0)} findings · "
+                              f"{r.get('reports_recorded',0)} reports"
+                              + (f"  ([yellow]{len(r['conflicts'])} conflict(s)[/yellow])"
+                                 if r.get('conflicts') else ""))
+                    for c in r.get("conflicts", []):
+                        con.print(f"    [dim]{c}[/dim]")
+            except sr.DeckError as e:
+                err.print(f"[red]deck sync failed:[/red] {e}")
+                raise typer.Exit(1)
+
+    con.print("[green]sync complete[/green]")
 
 
 # ══════════════════════════════════════════════════════════════════ renderers

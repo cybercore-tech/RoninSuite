@@ -157,8 +157,17 @@ touching updates: `ronin add --missing`.
 
 ### `ronin sync`
 
-Runs an online currency check and refreshes nuclei templates. `--offline` just
-re-reads local state.
+```
+ronin sync                                  # toolchain currency + nuclei templates
+ronin sync --remote https://subgridsec.org --token <tok>   # + SubgridSec Deck sync
+ronin sync --remote-only [--pull-only|--push-only] [--full]
+```
+
+With a Deck configured (`--remote/--token`, or `RONIN_DECK_URL`/`RONIN_DECK_TOKEN`,
+or the persisted URL) it also **pulls customers** into `clients` and **pushes**
+engagement + finding summaries + report digests. Deck owns customers/invoices,
+RoninSuite owns engagements/findings; last-writer-wins on `updated_at`. Raw
+evidence never leaves the machine. See `~/.sysops/subgridsec-deck`.
 
 ### `ronin doctor`
 
