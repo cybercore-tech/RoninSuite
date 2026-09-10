@@ -406,68 +406,135 @@ def doctor(
             con.print(f"  [{c}]{n}: {o}[/{c}]")
 
 
+def _catalog_rows(category: str = "", search: str = "", include_installed: bool = True):
+    """(name, category, src, installed, description) for the full addable catalog."""
+    import shutil
+
+    from ronin.data.extended_tools import EXTENDED
+    from ronin.tools.registry import CATALOG, adapters
+
+    rows = []
+    for n, m in CATALOG.items():
+        d = adapters()[n].summary if n in adapters() else ""
+        rows.append((n, m["category"], "core", CATALOG[n].get("binary", n), d))
+    for n, m in EXTENDED.items():
+        rows.append((n, m["category"], "add", m.get("binary", n), m["desc"]))
+    out = []
+    for n, cat, src, binary, desc in sorted(rows):
+        if category and cat != category:
+            continue
+        if search and search.lower() not in f"{n} {cat} {desc}".lower():
+            continue
+        inst = shutil.which(binary) is not None
+        if not include_installed and inst:
+            continue
+        out.append((n, cat, src, inst, desc))
+    return out
+
+
+def _parse_selection(raw: str, names: list[str]) -> list[str]:
+    """'1 4 7-9 nuclei, all' -> resolved list of tool names (order preserved, deduped)."""
+    raw = raw.strip().lower()
+    if raw in ("all", "*"):
+        return list(names)
+    picked: list[str] = []
+    for tok in re.split(r"[,\s]+", raw):
+        if not tok:
+            continue
+        if "-" in tok and all(p.isdigit() for p in tok.split("-", 1)):
+            a, b = (int(x) for x in tok.split("-", 1))
+            for i in range(a, b + 1):
+                if 1 <= i <= len(names):
+                    picked.append(names[i - 1])
+        elif tok.isdigit():
+            i = int(tok)
+            if 1 <= i <= len(names):
+                picked.append(names[i - 1])
+        elif tok in names:
+            picked.append(tok)
+    return list(dict.fromkeys(picked))
+
+
 @app.command()
 def add(
-    tools: list[str] = typer.Argument(None, help="tool name(s) to install"),
-    list_: bool = typer.Option(False, "--list", help="list what's addable"),
-    missing: bool = typer.Option(False, "--missing",
-                                 help="install every not-installed tool with a RoninSuite adapter"),
-    extended: bool = typer.Option(False, "--extended",
-                                  help="with --missing: also install the extended catalog"),
-    category: str = typer.Option("", help="filter --list by category"),
-    search: str = typer.Option("", help="filter --list by text"),
-    yes: bool = typer.Option(False, "--yes", "-y", help="don't prompt for --missing"),
+    tools: list[str] = typer.Argument(None, help="tool name(s) to install; omit for the picker"),
+    list_: bool = typer.Option(False, "--list", help="print the catalog and exit (no prompt)"),
+    missing: bool = typer.Option(False, "--missing", help="target every not-installed tool"),
+    extended: bool = typer.Option(False, "--extended", help="include the extended catalog"),
+    category: str = typer.Option("", help="filter to one category"),
+    search: str = typer.Option("", help="filter by text"),
+    yes: bool = typer.Option(False, "--yes", "-y", help="don't prompt (with --missing / explicit names)"),
     dry_run: bool = typer.Option(False, help="print commands without running them"),
 ):
-    """Install pentest tool(s) from the core or extended (awesome-list) catalog."""
-    from ronin.data.extended_tools import EXTENDED, categories
+    """Install pentest tool(s) from the core + extended (awesome-list) catalog.
+
+    `ronin add`            interactive picker
+    `ronin add nuclei gau` install by name
+    `ronin add --list`     just print the catalog
+    `ronin add --missing`  target everything not installed
+    """
+    from ronin.data.extended_tools import categories
     from ronin.doctor import catalog_lookup
     from ronin.doctor import install as do_install
-    from ronin.doctor import survey
-    from ronin.tools.registry import CATALOG
 
-    if missing and not tools:
-        rows = [s for s in survey(include_extended=extended) if not s.installed]
-        names = [s.name for s in rows]
-        if not names:
-            con.print("[green]nothing missing[/green]")
-            return
-        con.print(f"[bold]{len(names)} missing:[/bold] {', '.join(names[:14])}"
+    # ── explicit names ────────────────────────────────────────────────────
+    if tools:
+        unknown = [x for x in tools if not catalog_lookup(x)]
+        if unknown:
+            err.print(f"[red]unknown:[/red] {', '.join(unknown)} — try `ronin add --search <text>`")
+            raise typer.Exit(1)
+        if not yes and not dry_run:
+            typer.confirm(f"install {', '.join(tools)}? (sudo/yay may prompt)", abort=True)
+        for n, o in do_install(list(tools), dry_run=dry_run).items():
+            _outcome(n, o)
+        return
+
+    rows = _catalog_rows(category, search, include_installed=list_)
+    if not missing:
+        rows = [r for r in rows if not r[3]] if not list_ else rows
+
+    # ── --list : dump and exit ───────────────────────────────────────────
+    if list_:
+        t = _table("tool", "category", "src", "installed", "description", title="addable tools")
+        for n, cat, src, inst, desc in rows:
+            t.add_row(n, cat, src, "[green]yes[/green]" if inst else "[dim]no[/dim]", desc[:64])
+        con.print(t)
+        con.print(f"categories: {', '.join(categories())}  ·  "
+                  "pick interactively: [cyan]ronin add[/cyan]")
+        return
+
+    if not rows:
+        con.print("[green]nothing to add[/green] (all matching tools are installed)")
+        return
+    names = [r[0] for r in rows]
+
+    # ── --missing : all of them, one confirm ────────────────────────────
+    if missing:
+        con.print(f"[bold]{len(names)} not installed:[/bold] {', '.join(names[:14])}"
                   + (" …" if len(names) > 14 else ""))
         if not yes and not dry_run:
-            typer.confirm("install all of these? (sudo/yay may prompt)", abort=True)
+            typer.confirm("install all of these?", abort=True)
         for n, o in do_install(names, dry_run=dry_run).items():
             _outcome(n, o)
         return
 
-    if list_ or not tools:
-        t = _table("tool", "category", "src", "installed", "description",
-                   title="addable tools")
-        import shutil
-
-        allrows = [(n, m["category"], "core",
-                    (CATALOG[n].get("binary", n)), "") for n, m in CATALOG.items()]
-        allrows += [(n, m["category"], "add", m.get("binary", n), m["desc"])
-                    for n, m in EXTENDED.items()]
-        for n, cat, src, binary, desc in sorted(allrows):
-            if category and cat != category:
-                continue
-            if search and search.lower() not in f"{n} {cat} {desc}".lower():
-                continue
-            t.add_row(n, cat, src,
-                      "[green]yes[/green]" if shutil.which(binary) else "[dim]no[/dim]",
-                      desc[:64])
-        con.print(t)
-        con.print(f"categories: {', '.join(categories())}")
-        con.print("install:  [cyan]ronin add <name> [<name> …][/cyan]")
+    # ── interactive picker ──────────────────────────────────────────────
+    t = _table("#", "tool", "category", "src", "description",
+               title=f"addable — {len(names)} not installed"
+                     + (f" · {category}" if category else ""))
+    for i, (n, cat, src, _inst, desc) in enumerate(rows, 1):
+        t.add_row(str(i), n, cat, src, desc[:58])
+    con.print(t)
+    raw = typer.prompt("select tools (e.g. 1 4 7-9 nuclei · 'all' · Enter to cancel)",
+                       default="", show_default=False)
+    chosen = _parse_selection(raw, names)
+    if not chosen:
+        con.print("[dim]nothing selected[/dim]")
         return
-
-    unknown = [x for x in tools if not catalog_lookup(x)]
-    if unknown:
-        err.print(f"[red]unknown:[/red] {', '.join(unknown)}  — try `ronin add --search <text>`")
-        raise typer.Exit(1)
-    con.print(f"[bold]installing:[/bold] {', '.join(tools)}  (sudo/yay may prompt)")
-    for n, o in do_install(list(tools), dry_run=dry_run).items():
+    con.print(f"[bold]installing:[/bold] {', '.join(chosen)}  (sudo/yay may prompt)")
+    if not dry_run:
+        typer.confirm("proceed?", abort=True)
+    for n, o in do_install(chosen, dry_run=dry_run).items():
         _outcome(n, o)
 
 

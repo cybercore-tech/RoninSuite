@@ -95,13 +95,19 @@ in `ronin client`.
 ### `ronin add`
 
 ```
-ronin add                              # same as --list
-ronin add --list [--category recon] [--search subdomain]
-ronin add subfinder dalfox certipy     # install by name
-ronin add --missing [-y]               # install every not-installed adapter tool
-ronin add --missing --extended         # …plus the extended catalog
+ronin add                              # interactive picker: numbered list → choose → install
+ronin add --category recon             # …scoped to one category
+ronin add --search xss                 # …scoped by text
+ronin add nuclei dalfox certipy        # install by name (confirm, or -y)
+ronin add --list [--category] [--search]   # just print the catalog, no prompt
+ronin add --missing [-y]               # target every not-installed adapter tool (one confirm)
+ronin add --missing --extended         # …include the extended catalog
 ronin add <name> --dry-run             # print the install commands only
 ```
+
+Picker input accepts numbers, ranges and names: `1 4 7-9 nuclei`, or `all`, or
+Enter to cancel. By default only *not-installed* tools are shown.
+
 Resolves against the **core catalog** (adapters) then the **extended catalog**
 (`ronin/data/extended_tools.py`, ~55 awesome-pentest tools). Recipes are tried
 `pacman → aur (yay) → go install → pipx/uv tool → git clone`. `git` tools land in

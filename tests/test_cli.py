@@ -65,3 +65,21 @@ def test_scope_exit_codes(tmp_path, monkeypatch):
         'in_scope: ["*.acme.example"]\nout_of_scope: []\n')
     assert r("scope", "e1", "https://x.acme.example").exit_code == 0
     assert r("scope", "e1", "https://evil.example").exit_code == 2
+
+
+def test_add_picker_selection_parsing():
+    from ronin.cli.app import _parse_selection
+    names = ["nmap", "nuclei", "httpx", "ffuf", "gau"]
+    assert _parse_selection("1 3", names) == ["nmap", "httpx"]
+    assert _parse_selection("2-4", names) == ["nuclei", "httpx", "ffuf"]
+    assert _parse_selection("gau, 1", names) == ["gau", "nmap"]
+    assert _parse_selection("all", names) == names
+    assert _parse_selection("", names) == []
+    assert _parse_selection("99 bogus", names) == []
+
+
+def test_add_picker_flow(monkeypatch):
+    out = runner.invoke(app, ["add", "--category", "recon", "--dry-run"],
+                        env={"COLUMNS": "220"}, input="1\n").output
+    assert "select tools" in out
+    assert "go install" in out or "pacman" in out or "would install" in out
