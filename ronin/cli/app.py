@@ -739,7 +739,8 @@ def sync(
                     r = sr.push_all(base, tok)
                     con.print(f"  pushed [green]{r.get('engagements_upserted',0)}[/green] engagements · "
                               f"{r.get('findings_synced',0)} findings · "
-                              f"{r.get('reports_recorded',0)} reports"
+                              f"{r.get('reports_recorded',0)} reports · "
+                              f"{r.get('invoices_synced',0)} invoices"
                               + (f"  ([yellow]{len(r['conflicts'])} conflict(s)[/yellow])"
                                  if r.get('conflicts') else ""))
                     for c in r.get("conflicts", []):

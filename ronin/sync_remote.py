@@ -84,7 +84,19 @@ def pull_customers(base: str, token: str, *, full: bool = False) -> int:
 
 # ── push: RoninSuite engagements/findings/reports -> Deck ──────────────────
 def push_all(base: str, token: str) -> dict:
-    engs, finds, reps = [], [], []
+    engs, finds, reps, invs = [], [], [], []
+    for iv in db.list_invoices():
+        invs.append({
+            "external_ref": iv.id,
+            "customer_slug": iv.client_slug,
+            "number": iv.number or None,
+            "currency": iv.currency,
+            "status": iv.status if iv.status in ("draft", "sent") else "draft",
+            "issued_on": iv.issued.isoformat() if iv.issued else None,
+            "due_on": iv.due.isoformat() if iv.due else None,
+            "amount_cents": round(iv.amount * 100),
+            "description": iv.description,
+        })
     for e in db.list_engagements():
         cl = db.get_client(e.client_slug) if e.client_slug else None
         engs.append({
@@ -107,7 +119,7 @@ def push_all(base: str, token: str) -> dict:
         for r in _reports_for(e.slug):
             reps.append(r)
     resp = _req("POST", f"{base}/api/v1/sync/push", token,
-                {"engagements": engs, "findings": finds, "reports": reps})
+                {"engagements": engs, "findings": finds, "reports": reps, "invoices": invs})
     db.set_state(_K_PUSHED, _now_iso())
     return resp
 
