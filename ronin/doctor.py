@@ -98,3 +98,38 @@ def install(names: list[str], *, dry_run: bool = False) -> dict[str, str]:
             ok = _run(runner + [r["pipx"]], dry_run)
         results[name] = "installed" if ok else "FAILED - install manually: " + str(r)
     return results
+
+
+def update(names: list[str], *, dry_run: bool = False) -> dict[str, str]:
+    """Update already-installed tools to their latest version."""
+    have_yay = shutil.which("yay") is not None
+    have_go = shutil.which("go") is not None
+    gobin = os.path.expanduser("~/.local/bin")
+    statuses = {s.name: s for s in survey()}
+    results: dict[str, str] = {}
+
+    for name in names:
+        st = statuses.get(name)
+        if not st:
+            results[name] = "unknown tool"
+            continue
+        if not st.installed:
+            results[name] = "not installed - use install"
+            continue
+        r = st.recipe
+        ok = False
+        if "pacman" in r:
+            ok = _run(["sudo", "pacman", "-S", "--noconfirm", r["pacman"]], dry_run)
+        elif "aur" in r and have_yay:
+            ok = _run(["yay", "-S", "--noconfirm", r["aur"]], dry_run)
+        elif "go" in r and have_go:
+            print("   $ GOBIN=%s go install %s" % (gobin, r["go"]))
+            ok = dry_run or subprocess.run(
+                ["go", "install", r["go"]], env={**os.environ, "GOBIN": gobin}
+            ).returncode == 0
+        results[name] = "updated" if ok else "FAILED - update manually: " + str(r)
+
+    if "nuclei" in names and shutil.which("nuclei"):
+        _run(["nuclei", "-update-templates", "-silent"], dry_run)
+        results["nuclei-templates"] = "refreshed"
+    return results

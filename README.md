@@ -13,6 +13,16 @@ Remediation) driven by a normalized findings model with CVSS v3.1 scoring.
 
 ## What it does
 
+- **Cybercore TUI** (Textual) with a tabbed console:
+  **Dashboard** (context, overdue-retest and outdated-tool alerts, recent runs) ·
+  **Tools** (catalog + configure/run/stream) · **Reports** · **Clients** ·
+  **Updates** · **Toolbox**. Number keys `1–6` jump tabs, `e` picks the
+  engagement, `/` filters a table.
+- **Clients & retest cadence** — a client record groups engagements, tracks the
+  last test date, and (with a `cadence_days`) shows the next-due date and flags
+  overdue retests. Per-client remediation progress rolls up from finding status.
+- **Finding status workflow** — `open → in progress → fixed → accepted → closed`,
+  cycled with `s` in the findings view; feeds the Clients progress bars.
 - **Wraps real tools** through thin adapters. Each adapter builds a safe command,
   streams output live, and parses the tool's machine-readable results into one
   `Finding` schema (severity, CVSS vector + score, CWE/CVE, evidence,
@@ -85,6 +95,14 @@ uv run ronin run nuclei -e acme-widgets-llc-20260909 -t https://app.acme.example
 # 4. re-render reports any time from stored findings
 uv run ronin report acme-widgets-llc-20260909 --level all --format md,html,pdf
 
+# recurring clients + retest reminders
+uv run ronin client new --name "Acme Widgets LLC" --contact "J. Okafor" --cadence-days 90
+uv run ronin engagement new --client "Acme Widgets LLC" --client-slug acme-widgets-llc
+uv run ronin client list          # last tested / next due / % remediated
+
+# toolchain currency
+uv run ronin updates --check      # installed vs latest, pacman updates, template age
+
 # or drive the whole thing from the TUI
 uv run ronin
 ```
@@ -113,8 +131,9 @@ ronin/
     render.py        context builder + MD/HTML/PDF renderer
     templates/       Jinja2: _macros + executive|technical|remediation + HTML shell
   doctor.py          detect / install the toolchain on Arch
+  updates.py         toolchain currency (installed vs latest, template age)
   cli/app.py         Typer CLI (`ronin ...`)
-  tui/app.py         Textual TUI
+  tui/app.py         Textual TUI (cybercore theme in tui/theme.py)
 engagements/<slug>/  scope.yaml, evidence/<run-id>/...
 reports/<slug>/<ts>/ executive|technical|remediation .{md,html,pdf} + index.html
 ronin.db  audit.log

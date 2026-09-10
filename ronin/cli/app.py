@@ -11,7 +11,7 @@ from rich.table import Table
 
 from ronin.config import load_dotenv, paths
 from ronin.core import db
-from ronin.core.models import Engagement
+from ronin.core.models import Client, Engagement
 from ronin.core.scope import SCOPE_TEMPLATE, Scope, ScopeViolation
 
 app = typer.Typer(
@@ -19,8 +19,16 @@ app = typer.Typer(
     help="RoninSuite - portable offensive toolkit for Linux with tiered CVSS reporting.",
 )
 engagement_app = typer.Typer(help="Create and inspect engagements.")
+client_app = typer.Typer(help="Manage recurring clients and retest cadence.")
 app.add_typer(engagement_app, name="engagement")
+app.add_typer(client_app, name="client")
 con = Console()
+
+
+def _slugify(s: str) -> str:
+    import re
+
+    return re.sub(r"[^a-z0-9]+", "-", s.lower()).strip("-")
 
 
 @app.callback(invoke_without_command=True)
@@ -76,19 +84,21 @@ def engagement_new(
     tester: str = typer.Option("", help="your name (defaults to $USER)"),
     slug: str = typer.Option("", help="short id; default derived from client + date"),
     days: int = typer.Option(14, help="length of the testing window from today"),
+    client_slug: str = typer.Option("", "--client-slug",
+                                    help="link to an existing `ronin client` record"),
 ):
     """Create an engagement and scaffold its scope.yaml."""
     import getpass
-    import re
 
     tester = tester or getpass.getuser()
+    if client_slug and not db.get_client(client_slug):
+        con.print(f"[yellow]no client '{client_slug}' - create it with `ronin client new`[/yellow]")
     if not slug:
-        base = re.sub(r"[^a-z0-9]+", "-", client.lower()).strip("-")
-        slug = f"{base}-{_dt.date.today():%Y%m%d}"
+        slug = f"{_slugify(client)}-{_dt.date.today():%Y%m%d}"
     start = _dt.date.today()
     end = start + _dt.timedelta(days=days)
 
-    e = Engagement(slug=slug, client=client, tester=tester)
+    e = Engagement(slug=slug, client=client, tester=tester, client_slug=client_slug)
     db.upsert_engagement(e)
     sf = paths().scope_file(slug)
     if not sf.exists():
@@ -115,6 +125,79 @@ def engagement_list():
         t.add_row(e.slug, e.client, e.tester, e.created.strftime("%Y-%m-%d"),
                   str(len(runs)), str(len(finds)))
     con.print(t)
+
+
+@client_app.command("new")
+def client_new(
+    name: str = typer.Option(..., help="client / organisation name"),
+    slug: str = typer.Option("", help="short id (default: slugified name)"),
+    contact: str = typer.Option("", help="primary contact name"),
+    email: str = typer.Option("", help="primary contact email"),
+    cadence_days: int = typer.Option(0, help="retest reminder interval; 0 = none"),
+):
+    """Add a recurring client with an optional retest cadence."""
+    slug = slug or _slugify(name)
+    db.upsert_client(Client(slug=slug, name=name, contact_name=contact,
+                            contact_email=email, cadence_days=cadence_days))
+    con.print(f"[green]client[/green] [bold]{slug}[/bold] saved"
+              + (f"  (retest every {cadence_days}d)" if cadence_days else ""))
+
+
+@client_app.command("list")
+def client_list():
+    """List clients with engagement counts and retest status."""
+    rows = db.list_clients()
+    if not rows:
+        con.print("no clients yet - `ronin client new --name \"Acme\" --cadence-days 180`")
+        return
+    t = Table(header_style="bold")
+    for c in ("slug", "name", "contact", "engagements", "last tested", "next due", "remediation"):
+        t.add_column(c)
+    for cl in rows:
+        p = db.client_progress(cl.slug)
+        due = p["next_due"].strftime("%Y-%m-%d") if p["next_due"] else "-"
+        if p["overdue"]:
+            due = f"[red]{due} !"
+        prog = f"{p['progress_pct']}%" if p["progress_pct"] is not None else "-"
+        t.add_row(cl.slug, cl.name, cl.contact_name or "-", str(p["engagements"]),
+                  p["last_tested"].strftime("%Y-%m-%d") if p["last_tested"] else "-",
+                  due, prog)
+    con.print(t)
+
+
+@client_app.command("link")
+def client_link(engagement: str, client_slug: str):
+    """Attach an existing ENGAGEMENT to a CLIENT record."""
+    if not db.get_client(client_slug):
+        con.print(f"[red]no client '{client_slug}'[/red]")
+        raise typer.Exit(1)
+    db.set_engagement_client(engagement, client_slug)
+    con.print(f"[green]linked[/green] {engagement} -> {client_slug}")
+
+
+@app.command()
+def updates(check: bool = typer.Option(False, "--check", help="run an online check now"),
+            offline: bool = typer.Option(False, help="skip network lookups")):
+    """Show toolchain currency (installed vs latest, pacman updates, template age)."""
+    from ronin import updates as up
+
+    rep = up.check(online=not offline) if check else (up.cached() or up.check(online=not offline))
+    t = Table(title="Toolchain currency", header_style="bold")
+    for c in ("tool", "cat", "installed", "latest", "src", "status"):
+        t.add_column(c)
+    for x in rep.tools:
+        col = {"current": "green", "outdated": "yellow", "missing": "red"}.get(x.status, "dim")
+        t.add_row(x.name, x.category, x.installed_version or ("-" if x.installed else "not installed"),
+                  x.latest_version or "-", x.source, f"[{col}]{x.status}[/{col}]")
+    con.print(t)
+    con.print(f"checked: {rep.checked_at:%Y-%m-%d %H:%M UTC}  ·  "
+              f"pacman updates: {len(rep.pacman_updates)}  ·  "
+              f"nuclei templates age: "
+              f"{rep.nuclei_templates_age_days if rep.nuclei_templates_age_days is not None else '?'}d")
+    if rep.outdated:
+        con.print(f"[yellow]{len(rep.outdated)} outdated:[/yellow] "
+                  + ", ".join(x.name for x in rep.outdated)
+                  + "   -> ronin doctor --install --only <name>  (or update via the TUI)")
 
 
 @app.command("scope")

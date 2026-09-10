@@ -54,6 +54,32 @@ class RunStatus(str, enum.Enum):
     BLOCKED = "blocked"          # scope check refused the target
 
 
+class FindingStatus(str, enum.Enum):
+    OPEN = "open"
+    IN_PROGRESS = "in_progress"
+    FIXED = "fixed"             # remediated, awaiting retest
+    ACCEPTED = "accepted"       # client formally accepted the residual risk
+    CLOSED = "closed"           # retest confirms the check no longer fires
+
+    @classmethod
+    def cycle(cls, current: str) -> str:
+        order = [s.value for s in cls]
+        try:
+            return order[(order.index(current) + 1) % len(order)]
+        except ValueError:
+            return cls.OPEN.value
+
+
+class Client(BaseModel):
+    slug: str
+    name: str
+    contact_name: str = ""
+    contact_email: str = ""
+    notes: str = ""
+    cadence_days: int = 0        # 0 = no recurring retest reminder
+    created: _dt.datetime = Field(default_factory=_now)
+
+
 class Engagement(BaseModel):
     slug: str
     client: str
@@ -61,6 +87,7 @@ class Engagement(BaseModel):
     authorized_by: str = ""
     created: _dt.datetime = Field(default_factory=_now)
     notes: str = ""
+    client_slug: str = ""       # link to a Client record (optional)
 
 
 class ToolRun(BaseModel):
@@ -99,6 +126,7 @@ class Finding(BaseModel):
     cvss_score: float | None = None
     confidence: str = "firm"                  # tentative | firm | confirmed
 
+    status: str = "open"                      # remediation lifecycle (FindingStatus)
     description: str = ""
     evidence: str = ""                        # matched output / raw snippet
     request: str | None = None                # web: raw HTTP request
