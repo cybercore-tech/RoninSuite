@@ -68,11 +68,15 @@ run.
 Requires [`uv`](https://docs.astral.sh/uv/). Python 3.13 is fetched automatically.
 
 ```bash
-cd /home/raven/Toolkits/RoninSuite
-uv sync --extra dev          # or: make setup
-uv run ronin doctor          # see what's installed
-uv run ronin doctor --install --only nmap,nuclei,httpx,ffuf,testssl
+cd ~/Toolkits/RoninSuite
+uv sync --extra dev            # or: make setup
+scripts/install-cli.sh        # put `ronin` on PATH (~/.local/bin symlink)
+ronin doctor                  # see what's installed
+ronin doctor --install --only nmap,nuclei,httpx,ffuf,testssl
 ```
+
+After `install-cli.sh` everything is just `ronin …` from any directory — no
+`uv run`. `$RONIN_HOME` overrides the project root (see `USB.md`).
 
 System libraries for PDF (WeasyPrint) — Pango / Cairo / gdk-pixbuf — are already
 present on most desktop Arch installs. If PDF export is unavailable, MD + HTML
@@ -81,33 +85,35 @@ still render.
 ## Use
 
 ```bash
-# 1. create an engagement and edit its scope
-uv run ronin engagement new --client "Acme Widgets LLC" --tester raven
-$EDITOR engagements/acme-widgets-llc-*/scope.yaml
+# 1. client + engagement (scope.yaml is scaffolded for you)
+ronin new client --name "Acme Widgets LLC" --contact "J. Okafor" --cadence-days 90
+ronin new engagement --client "Acme Widgets LLC" --client-slug acme-widgets-llc --slug acme-q3
+$EDITOR engagements/acme-q3/scope.yaml            # set in_scope
 
-# 2. check a target is in scope
-uv run ronin scope acme-widgets-llc-20260909 https://app.acme.example
+# 2. check a target
+ronin scope acme-q3 https://app.acme.example
 
-# 3. run a tool (parses findings + writes all three reports)
-uv run ronin run nuclei -e acme-widgets-llc-20260909 -t https://app.acme.example \
-    -o severity=medium,high,critical
+# 3. run a tool (parses findings + writes all three reports; -e optional if there's one engagement)
+ronin run nuclei -e acme-q3 -t https://app.acme.example -o severity=medium,high,critical
 
-# 4. re-render reports any time from stored findings
-uv run ronin report acme-widgets-llc-20260909 --level all --format md,html,pdf
+# 4. look around
+ronin list findings acme-q3 --severity high
+ronin search CVE-2021
+ronin client acme-widgets-llc                     # last tested / next due / % remediated
+ronin report acme-q3                              # re-render from stored findings
 
-# recurring clients + retest reminders
-uv run ronin client new --name "Acme Widgets LLC" --contact "J. Okafor" --cadence-days 90
-uv run ronin engagement new --client "Acme Widgets LLC" --client-slug acme-widgets-llc
-uv run ronin client list          # last tested / next due / % remediated
+# toolchain
+ronin update tools                                # installed vs latest
+ronin add dalfox certipy subfinder               # from the awesome-list catalog
+ronin sync                                        # refresh + nuclei templates
 
-# toolchain currency
-uv run ronin updates --check      # installed vs latest, pacman updates, template age
-
-# or drive the whole thing from the TUI
-uv run ronin
+# or just:
+ronin                                            # the TUI
 ```
 
-CLI knobs: `--opt k=v` (repeatable) sets tool options, `--intensity
+Full command + Python API reference: **[`docs/REFERENCE.md`](docs/REFERENCE.md)**.
+
+CLI knobs: `-o k=v` (repeatable) sets tool options, `--intensity
 stealth|normal|aggressive` scales rate limits and nmap timing, `--force --reason
 "..."` overrides scope (logged), `--run <id>` scopes a report to one run.
 

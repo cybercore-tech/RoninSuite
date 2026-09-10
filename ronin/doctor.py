@@ -1,13 +1,13 @@
-"""`ronin doctor` - detect the offensive toolchain and (optionally) install it on Arch.
+"""Toolchain provisioning for ``ronin doctor`` / ``ronin add`` / ``ronin update``.
 
-Install strategy, in order of preference per tool:
-  1. pacman  (official repos)      - sudo pacman -S --needed <pkg>
-  2. AUR     (via yay)             - yay -S --needed <pkg>
-  3. go install                    - GOBIN=~/.local/bin go install <module>
-  4. pipx / uv tool                - for Python CLIs
+Install strategy per recipe, tried in order:
+  1. pacman  (official repos)   - sudo pacman -S --needed <pkg>
+  2. AUR     (via yay)          - yay -S --needed <pkg>
+  3. go install                 - GOBIN=~/.local/bin go install <module>
+  4. pipx / uv tool             - Python CLIs
+  5. git                        - clone into $RONIN_HOME/tools/<name> (not on PATH)
 
-Nothing is installed without ``--install``.  Go-based tools land in
-``~/.local/bin`` so they work from a normal user account.
+Nothing is installed without an explicit action.
 """
 from __future__ import annotations
 
@@ -16,7 +16,11 @@ import shutil
 import subprocess
 from dataclasses import dataclass
 
+from ronin.config import paths
+from ronin.data.extended_tools import EXTENDED
 from ronin.tools.registry import CATALOG, adapters
+
+_GOBIN = os.path.expanduser("~/.local/bin")
 
 
 @dataclass
@@ -29,6 +33,8 @@ class ToolStatus:
     has_adapter: bool
     aggressive: bool
     recipe: dict
+    extended: bool = False
+    desc: str = ""
 
 
 def _binary_for(name: str, meta: dict) -> str:
@@ -37,7 +43,22 @@ def _binary_for(name: str, meta: dict) -> str:
     return meta.get("binary", name)
 
 
-def survey() -> list[ToolStatus]:
+def catalog_lookup(name: str) -> dict | None:
+    """Return {'category','recipe','desc','extended','binary'} for a tool name, or None."""
+    if name in CATALOG:
+        m = CATALOG[name]
+        return {"category": m["category"], "recipe": m.get("install", {}),
+                "desc": (adapters()[name].summary if name in adapters() else ""),
+                "extended": False, "binary": _binary_for(name, m)}
+    if name in EXTENDED:
+        m = EXTENDED[name]
+        return {"category": m["category"], "recipe": m.get("install", {}),
+                "desc": m.get("desc", ""), "extended": True,
+                "binary": m.get("binary", name)}
+    return None
+
+
+def survey(include_extended: bool = False) -> list[ToolStatus]:
     ads = adapters()
     out: list[ToolStatus] = []
     for name, meta in sorted(CATALOG.items(), key=lambda kv: (kv[1]["category"], kv[0])):
@@ -46,14 +67,22 @@ def survey() -> list[ToolStatus]:
         agg = meta.get("aggressive", False) or (name in ads and ads[name].aggressive)
         out.append(ToolStatus(
             name=name, category=meta["category"], binary=binary,
-            installed=path is not None, path=path,
-            has_adapter=name in ads, aggressive=agg,
-            recipe=meta.get("install", {}),
-        ))
+            installed=path is not None, path=path, has_adapter=name in ads,
+            aggressive=agg, recipe=meta.get("install", {}),
+            desc=ads[name].summary if name in ads else ""))
+    if include_extended:
+        for name, meta in sorted(EXTENDED.items(), key=lambda kv: (kv[1]["category"], kv[0])):
+            binary = meta.get("binary", name)
+            path = shutil.which(binary)
+            out.append(ToolStatus(
+                name=name, category=meta["category"], binary=binary,
+                installed=path is not None, path=path, has_adapter=False,
+                aggressive=False, recipe=meta.get("install", {}),
+                extended=True, desc=meta.get("desc", "")))
     return out
 
 
-def _run(cmd: list[str], dry: bool) -> bool:
+def _sh(cmd: list[str], dry: bool) -> bool:
     print("   $", " ".join(cmd))
     if dry:
         return True
@@ -64,72 +93,76 @@ def _run(cmd: list[str], dry: bool) -> bool:
         return False
 
 
-def install(names: list[str], *, dry_run: bool = False) -> dict[str, str]:
-    """Attempt to install each named tool.  Returns {name: outcome}."""
+def install_recipe(name: str, recipe: dict, *, dry_run: bool = False,
+                   update: bool = False) -> str:
+    """Run a single recipe.  Returns a short outcome string."""
+    if not recipe:
+        return "no install recipe - add it manually"
     have_yay = shutil.which("yay") is not None
     have_go = shutil.which("go") is not None
-    gobin = os.path.expanduser("~/.local/bin")
-    results: dict[str, str] = {}
-    statuses = {s.name: s for s in survey()}
+    needed = [] if update else ["--needed"]
+    ok = False
+    if "pacman" in recipe:
+        ok = _sh(["sudo", "pacman", "-S", *needed, "--noconfirm", recipe["pacman"]], dry_run)
+    if not ok and "aur" in recipe and have_yay:
+        ok = _sh(["yay", "-S", *needed, "--noconfirm", recipe["aur"]], dry_run)
+    if not ok and "go" in recipe and have_go:
+        print(f"   $ GOBIN={_GOBIN} go install {recipe['go']}")
+        ok = dry_run or subprocess.run(
+            ["go", "install", recipe["go"]], env={**os.environ, "GOBIN": _GOBIN}
+        ).returncode == 0
+    if not ok and "pipx" in recipe:
+        runner = ["uv", "tool", "install"] if shutil.which("uv") else ["pipx", "install"]
+        if update:
+            runner = (["uv", "tool", "upgrade"] if shutil.which("uv")
+                      else ["pipx", "upgrade"])
+        ok = _sh(runner + [recipe["pipx"]], dry_run)
+    if not ok and "git" in recipe:
+        dest = paths().root / "tools" / name
+        if dest.exists():
+            ok = _sh(["git", "-C", str(dest), "pull", "--ff-only"], dry_run)
+        else:
+            (paths().root / "tools").mkdir(parents=True, exist_ok=True)
+            ok = _sh(["git", "clone", "--depth", "1", recipe["git"], str(dest)], dry_run)
+        if ok:
+            return f"cloned to {dest} (not on PATH - run its script directly)"
+    if ok:
+        return "updated" if update else "installed"
+    return "FAILED - install manually: " + str(recipe)
 
+
+def install(names: list[str], *, dry_run: bool = False) -> dict[str, str]:
+    """Install named tools from the core or extended catalog."""
+    installed = {s.name: s for s in survey(include_extended=True)}
+    out: dict[str, str] = {}
     for name in names:
-        st = statuses.get(name)
-        if not st:
-            results[name] = "unknown tool"
+        st = installed.get(name)
+        info = catalog_lookup(name)
+        if not info:
+            out[name] = "unknown tool (try `ronin add --search <text>`)"
             continue
-        if st.installed:
-            results[name] = f"already installed ({st.path})"
+        if st and st.installed:
+            out[name] = f"already installed ({st.path})"
             continue
-        r = st.recipe
-        ok = False
-        if "pacman" in r:
-            ok = _run(["sudo", "pacman", "-S", "--needed", "--noconfirm", r["pacman"]], dry_run)
-        if not ok and "aur" in r and have_yay:
-            ok = _run(["yay", "-S", "--needed", "--noconfirm", r["aur"]], dry_run)
-        if not ok and "go" in r and have_go:
-            env = {**os.environ, "GOBIN": gobin}
-            print("   $ GOBIN=%s go install %s" % (gobin, r["go"]))
-            if dry_run:
-                ok = True
-            else:
-                ok = subprocess.run(["go", "install", r["go"]], env=env).returncode == 0
-        if not ok and "pipx" in r:
-            runner = ["uv", "tool", "install"] if shutil.which("uv") else ["pipx", "install"]
-            ok = _run(runner + [r["pipx"]], dry_run)
-        results[name] = "installed" if ok else "FAILED - install manually: " + str(r)
-    return results
+        out[name] = install_recipe(name, info["recipe"], dry_run=dry_run)
+    return out
 
 
 def update(names: list[str], *, dry_run: bool = False) -> dict[str, str]:
     """Update already-installed tools to their latest version."""
-    have_yay = shutil.which("yay") is not None
-    have_go = shutil.which("go") is not None
-    gobin = os.path.expanduser("~/.local/bin")
-    statuses = {s.name: s for s in survey()}
-    results: dict[str, str] = {}
-
+    installed = {s.name: s for s in survey(include_extended=True)}
+    out: dict[str, str] = {}
     for name in names:
-        st = statuses.get(name)
-        if not st:
-            results[name] = "unknown tool"
+        st = installed.get(name)
+        info = catalog_lookup(name)
+        if not info:
+            out[name] = "unknown tool"
             continue
-        if not st.installed:
-            results[name] = "not installed - use install"
+        if not (st and st.installed):
+            out[name] = "not installed - use `ronin add`"
             continue
-        r = st.recipe
-        ok = False
-        if "pacman" in r:
-            ok = _run(["sudo", "pacman", "-S", "--noconfirm", r["pacman"]], dry_run)
-        elif "aur" in r and have_yay:
-            ok = _run(["yay", "-S", "--noconfirm", r["aur"]], dry_run)
-        elif "go" in r and have_go:
-            print("   $ GOBIN=%s go install %s" % (gobin, r["go"]))
-            ok = dry_run or subprocess.run(
-                ["go", "install", r["go"]], env={**os.environ, "GOBIN": gobin}
-            ).returncode == 0
-        results[name] = "updated" if ok else "FAILED - update manually: " + str(r)
-
+        out[name] = install_recipe(name, info["recipe"], dry_run=dry_run, update=True)
     if "nuclei" in names and shutil.which("nuclei"):
-        _run(["nuclei", "-update-templates", "-silent"], dry_run)
-        results["nuclei-templates"] = "refreshed"
-    return results
+        _sh(["nuclei", "-update-templates", "-silent"], dry_run)
+        out["nuclei-templates"] = "refreshed"
+    return out

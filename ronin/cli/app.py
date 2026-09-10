@@ -1,9 +1,27 @@
-"""RoninSuite command line.  ``ronin`` with no subcommand launches the TUI."""
+"""RoninSuite command line — verb-first, minimal typing.
+
+    ronin                     launch the TUI
+    ronin help [command]      help
+    ronin run <tool> -t <t>   run a scan (auto-generates reports)
+    ronin report <eng>        (re)generate tiered reports
+    ronin scope <eng> <t>     scope check
+    ronin list <what>         tools | clients | engagements | reports | runs | findings
+    ronin show <what> <id>    client | engagement | finding | run | report
+    ronin search <text>       across findings, clients, engagements, tools, reports
+    ronin new client|engagement …
+    ronin link <eng> <client>
+    ronin client [<id>]       list clients, or show one
+    ronin engagement [<id>]   list engagements, or show one
+    ronin doctor              toolchain health
+    ronin add <tool> …        install tool(s) from the catalog / awesome list
+    ronin update [<tool> …]   update outdated tools  (`ronin update tools` = show table)
+    ronin sync                refresh update cache + nuclei templates
+"""
 from __future__ import annotations
 
 import datetime as _dt
+import re
 import sys
-from typing import Optional
 
 import typer
 from rich.console import Console
@@ -14,21 +32,42 @@ from ronin.core import db
 from ronin.core.models import Client, Engagement
 from ronin.core.scope import SCOPE_TEMPLATE, Scope, ScopeViolation
 
-app = typer.Typer(
-    add_completion=False, no_args_is_help=False,
-    help="RoninSuite - portable offensive toolkit for Linux with tiered CVSS reporting.",
-)
-engagement_app = typer.Typer(help="Create and inspect engagements.")
-client_app = typer.Typer(help="Manage recurring clients and retest cadence.")
-app.add_typer(engagement_app, name="engagement")
-app.add_typer(client_app, name="client")
+app = typer.Typer(add_completion=False, no_args_is_help=False, rich_markup_mode="rich",
+                  help="RoninSuite — portable offensive toolkit for Linux with tiered CVSS reporting.")
+new_app = typer.Typer(help="Create clients and engagements.")
+app.add_typer(new_app, name="new")
 con = Console()
+err = Console(stderr=True)
+
+_LISTABLE = ("tools", "clients", "engagements", "reports", "runs", "findings")
+_SHOWABLE = ("client", "engagement", "finding", "run", "report")
+_SEV_COL = {"critical": "bold red", "high": "red", "medium": "yellow", "low": "cyan", "info": "dim"}
+_ST_COL = {"current": "green", "outdated": "yellow", "missing": "red", "unknown": "dim"}
 
 
-def _slugify(s: str) -> str:
-    import re
-
+def _slug(s: str) -> str:
     return re.sub(r"[^a-z0-9]+", "-", s.lower()).strip("-")
+
+
+def _table(*cols: str, title: str = "") -> Table:
+    t = Table(title=title or None, header_style="bold cyan", border_style="blue")
+    for c in cols:
+        t.add_column(c)
+    return t
+
+
+def _resolve_engagement(slug: str | None) -> str:
+    if slug:
+        return slug
+    es = db.list_engagements()
+    if len(es) == 1:
+        return es[0].slug
+    if not es:
+        err.print("[red]no engagements — `ronin new engagement --client \"Acme\"`[/red]")
+        raise typer.Exit(1)
+    err.print("[yellow]multiple engagements; pass -e <slug>. recent:[/yellow] "
+              + ", ".join(e.slug for e in es[:6]))
+    raise typer.Exit(1)
 
 
 @app.callback(invoke_without_command=True)
@@ -41,94 +80,263 @@ def _root(ctx: typer.Context):
         raise typer.Exit()
 
 
-# --------------------------------------------------------------------------- doctor
 @app.command()
-def doctor(
-    install: bool = typer.Option(False, "--install", help="attempt installation"),
-    only: str = typer.Option("", help="comma list of tools to act on"),
-    dry_run: bool = typer.Option(False, help="print install commands without running"),
-):
-    """Show which offensive tools are present; optionally install the rest (Arch)."""
-    from ronin.doctor import install as do_install
-    from ronin.doctor import survey
+def help(command: str = typer.Argument("", help="command to explain")):  # noqa: A001
+    """Show help — `ronin help` for the overview, `ronin help run` for one command."""
+    from click import Context
 
-    rows = survey()
-    t = Table(title="RoninSuite toolchain", header_style="bold")
-    for c in ("tool", "category", "adapter", "aggressive", "status"):
-        t.add_column(c)
-    for s in rows:
-        t.add_row(
-            s.name, s.category,
-            "yes" if s.has_adapter else "-",
-            "[red]yes[/red]" if s.aggressive else "-",
-            f"[green]{s.path}[/green]" if s.installed else "[yellow]missing[/yellow]",
-        )
-    con.print(t)
-    present = sum(s.installed for s in rows)
-    con.print(f"{present}/{len(rows)} installed  ·  adapters wired: "
-              f"{sum(s.has_adapter for s in rows)}")
-
-    if install:
-        wanted = [x.strip() for x in only.split(",") if x.strip()] or \
-                 [s.name for s in rows if not s.installed]
-        con.print(f"\n[bold]Installing:[/bold] {', '.join(wanted)}")
-        for name, outcome in do_install(wanted, dry_run=dry_run).items():
-            col = "green" if outcome in ("installed",) or "already" in outcome else "yellow"
-            con.print(f"  [{col}]{name}: {outcome}[/{col}]")
-
-
-# ----------------------------------------------------------------------- engagement
-@engagement_app.command("new")
-def engagement_new(
-    client: str = typer.Option(..., help="client / organisation name"),
-    tester: str = typer.Option("", help="your name (defaults to $USER)"),
-    slug: str = typer.Option("", help="short id; default derived from client + date"),
-    days: int = typer.Option(14, help="length of the testing window from today"),
-    client_slug: str = typer.Option("", "--client-slug",
-                                    help="link to an existing `ronin client` record"),
-):
-    """Create an engagement and scaffold its scope.yaml."""
-    import getpass
-
-    tester = tester or getpass.getuser()
-    if client_slug and not db.get_client(client_slug):
-        con.print(f"[yellow]no client '{client_slug}' - create it with `ronin client new`[/yellow]")
-    if not slug:
-        slug = f"{_slugify(client)}-{_dt.date.today():%Y%m%d}"
-    start = _dt.date.today()
-    end = start + _dt.timedelta(days=days)
-
-    e = Engagement(slug=slug, client=client, tester=tester, client_slug=client_slug)
-    db.upsert_engagement(e)
-    sf = paths().scope_file(slug)
-    if not sf.exists():
-        sf.write_text(SCOPE_TEMPLATE.format(
-            client=client, slug=slug, tester=tester, start=start, end=end))
-    con.print(f"[green]created[/green] engagement [bold]{slug}[/bold]")
-    con.print(f"  scope file: {sf}")
-    con.print(f"  edit in_scope / out_of_scope, then:  ronin run nmap --engagement {slug} --target <host>")
-
-
-@engagement_app.command("list")
-def engagement_list():
-    """List engagements."""
-    rows = db.list_engagements()
-    if not rows:
-        con.print("no engagements yet — `ronin engagement new --client \"Acme\"`")
+    root = typer.main.get_command(app)
+    if not command:
+        con.print(root.get_help(Context(root, info_name="ronin")))
         return
-    t = Table(header_style="bold")
-    for c in ("slug", "client", "tester", "created", "runs", "findings"):
-        t.add_column(c)
-    for e in rows:
-        runs = db.list_runs(e.slug)
-        finds = db.get_findings(e.slug)
-        t.add_row(e.slug, e.client, e.tester, e.created.strftime("%Y-%m-%d"),
-                  str(len(runs)), str(len(finds)))
-    con.print(t)
+    sub = root.get_command(Context(root, info_name="ronin"), command)
+    if sub is None:
+        err.print(f"[red]no command '{command}'[/red]  ({', '.join(sorted(_LISTABLE))} …)")
+        raise typer.Exit(1)
+    con.print(sub.get_help(Context(sub, info_name=f"ronin {command}")))
 
 
-@client_app.command("new")
-def client_new(
+# ══════════════════════════════════════════════════════════════════ doing
+@app.command()
+def run(
+    tool: str = typer.Argument(..., help="adapter name (see `ronin list tools`)"),
+    target: str = typer.Option(..., "--target", "-t"),
+    engagement: str = typer.Option("", "--engagement", "-e", help="default: the only/one engagement"),
+    opt: list[str] = typer.Option([], "--opt", "-o", help="tool option k=v (repeatable)"),
+    intensity: str = typer.Option("normal", help="stealth | normal | aggressive"),
+    force: bool = typer.Option(False, help="run even if out of scope"),
+    reason: str = typer.Option("", help="written justification required with --force"),
+    yes: bool = typer.Option(False, "--yes", "-y", help="skip the aggressive-tool prompt"),
+    no_report: bool = typer.Option(False, help="don't auto-generate reports"),
+):
+    """Run one TOOL against one TARGET, parse findings, write reports."""
+    from ronin.core.runner import run_tool
+    from ronin.tools.registry import get
+
+    eng = _resolve_engagement(engagement)
+    try:
+        adapter = get(tool)
+    except KeyError as e:
+        err.print(f"[red]{e}[/red]")
+        raise typer.Exit(1)
+
+    options = {}
+    for kv in opt:
+        if "=" not in kv:
+            err.print(f"[red]bad --opt {kv!r}, expected k=v[/red]")
+            raise typer.Exit(1)
+        k, v = kv.split("=", 1)
+        options[k] = _coerce(v)
+
+    scope = None
+    sf = paths().scope_file(eng)
+    if sf.is_file():
+        scope = Scope.load(sf)
+    else:
+        con.print(f"[yellow]no scope file for {eng}; scope checks skipped[/yellow]")
+
+    if adapter.aggressive and not yes:
+        typer.confirm(f"'{tool}' is an active/aggressive tool. Proceed against {target}?", abort=True)
+    if force and not reason:
+        err.print("[red]--force requires --reason[/red]")
+        raise typer.Exit(1)
+
+    con.print(f"[bold]▶ {tool}[/bold] → {target}   (engagement {eng})")
+    try:
+        r = run_tool(adapter, eng, target, options=options, intensity=intensity, scope=scope,
+                     force=force, force_reason=reason, on_line=lambda s, l: con.print(_line(s, l)))
+    except ScopeViolation as v:
+        err.print(f"[red]BLOCKED[/red] — {v.decision.reason}. Use --force --reason '…' (logged).")
+        raise typer.Exit(2)
+    except FileNotFoundError as e:
+        err.print(f"[red]{e}[/red]")
+        raise typer.Exit(1)
+
+    finds = db.get_findings(eng, r.id)
+    con.print(f"\n[bold]{len(finds)} findings[/bold]  status={r.status.value}  evidence={r.evidence_dir}")
+    _print_findings(finds)
+    if not no_report:
+        _do_report(eng, run_id=r.id)
+
+
+@app.command()
+def report(
+    engagement: str = typer.Argument("", help="engagement slug (default: the only one)"),
+    run_id: str = typer.Option("", "--run", help="scope the report to one run id"),
+    level: str = typer.Option("all", help="executive | technical | remediation | all"),
+    fmt: str = typer.Option("md,html,pdf", "--format", help="comma list"),
+):
+    """(Re)generate the tiered reports for ENGAGEMENT from stored findings."""
+    _do_report(_resolve_engagement(engagement), run_id=run_id or None, level=level, fmt=fmt)
+
+
+@app.command()
+def scope(engagement: str, target: str):
+    """Check whether TARGET is in scope for ENGAGEMENT."""
+    sf = paths().scope_file(engagement)
+    if not sf.is_file():
+        err.print(f"[red]no scope file[/red] at {sf}")
+        raise typer.Exit(1)
+    d = Scope.load(sf).check(target)
+    col = "green" if d.allowed else "red"
+    con.print(f"[{col}]{'IN SCOPE' if d.allowed else 'OUT OF SCOPE'}[/{col}] — {d.reason}")
+    if d.allowed and not d.within_window:
+        con.print("[yellow]note: outside the testing window[/yellow]")
+    raise typer.Exit(0 if d.allowed else 2)
+
+
+# ══════════════════════════════════════════════════════════════════ looking
+@app.command("list")
+def list_(
+    what: str = typer.Argument(..., help="tools | clients | engagements | reports | runs | findings"),
+    target: str = typer.Argument("", help="engagement slug for runs/findings; category for tools"),
+    severity: str = typer.Option("", help="findings filter: info|low|medium|high|critical"),
+    status: str = typer.Option("", help="findings filter: open|in_progress|fixed|accepted|closed"),
+):
+    """List RoninSuite objects."""
+    what = what.rstrip("s") + "s" if what.rstrip("s") + "s" in _LISTABLE else what
+    if what == "tools":
+        _list_tools(target)
+    elif what == "clients":
+        _list_clients()
+    elif what == "engagements":
+        _list_engagements()
+    elif what == "reports":
+        _list_reports(target)
+    elif what == "runs":
+        _list_runs(_resolve_engagement(target or None))
+    elif what == "findings":
+        _list_findings(_resolve_engagement(target or None), severity, status)
+    else:
+        err.print(f"[red]can't list '{what}'[/red] — one of: {', '.join(_LISTABLE)}")
+        raise typer.Exit(1)
+
+
+@app.command()
+def show(what: str, id: str):  # noqa: A002
+    """Show one object in detail: client | engagement | finding | run | report."""
+    what = what.rstrip("s")
+    if what == "client":
+        _show_client(id)
+    elif what == "engagement":
+        _show_engagement(id)
+    elif what == "finding":
+        _show_finding(id)
+    elif what == "run":
+        _show_run(id)
+    elif what == "report":
+        con.print(f"open: file://{paths().reports / id}/index.html")
+    else:
+        err.print(f"[red]can't show '{what}'[/red] — one of: {', '.join(_SHOWABLE)}")
+        raise typer.Exit(1)
+
+
+@app.command()
+def search(
+    text: str,
+    type: str = typer.Option("", "--type", help="narrow: findings|clients|engagements|tools|reports"),
+):
+    """Fuzzy search across findings, clients, engagements, the tool catalogs and reports."""
+    q = text.lower()
+    want = {x.strip() for x in type.split(",") if x.strip()}
+    hit = 0
+
+    def sect(name):
+        return not want or name in want
+
+    if sect("tools"):
+        from ronin.data.extended_tools import EXTENDED
+        from ronin.tools.registry import CATALOG, adapters
+
+        rows = []
+        for n, m in CATALOG.items():
+            d = adapters()[n].summary if n in adapters() else ""
+            if q in f"{n} {m['category']} {d}".lower():
+                rows.append((n, m["category"], "core", d))
+        for n, m in EXTENDED.items():
+            if q in f"{n} {m['category']} {m['desc']}".lower():
+                rows.append((n, m["category"], "add", m["desc"]))
+        if rows:
+            hit += len(rows)
+            t = _table("tool", "category", "src", "description", title="tools")
+            for r in sorted(rows):
+                t.add_row(*[str(x)[:70] for x in r])
+            con.print(t)
+
+    if sect("clients"):
+        rows = [c for c in db.list_clients()
+                if q in f"{c.slug} {c.name} {c.contact_name} {c.contact_email}".lower()]
+        if rows:
+            hit += len(rows)
+            t = _table("slug", "name", "contact", title="clients")
+            for c in rows:
+                t.add_row(c.slug, c.name, c.contact_name or "-")
+            con.print(t)
+
+    if sect("engagements"):
+        rows = [e for e in db.list_engagements()
+                if q in f"{e.slug} {e.client} {e.client_slug} {e.notes}".lower()]
+        if rows:
+            hit += len(rows)
+            t = _table("slug", "client", "linked", title="engagements")
+            for e in rows:
+                t.add_row(e.slug, e.client, e.client_slug or "-")
+            con.print(t)
+
+    if sect("findings"):
+        rows = []
+        for e in db.list_engagements():
+            for f in db.get_findings(e.slug):
+                blob = f"{f.title} {f.target} {' '.join(f.cve)} {' '.join(f.tags)} {f.tool}".lower()
+                if q in blob:
+                    rows.append((e.slug, f))
+        if rows:
+            hit += len(rows)
+            t = _table("engagement", "sev", "title", "target", "status", title="findings")
+            for es, f in sorted(rows, key=lambda x: x[1].severity.rank, reverse=True)[:40]:
+                t.add_row(es, f"[{_SEV_COL.get(f.severity.value,'')}]{f.severity.value.upper()}[/]",
+                          f.title[:52], f.target[:34], f.status)
+            con.print(t)
+
+    if sect("reports"):
+        rows = [p for p in paths().reports.glob("*/*") if p.is_dir() and q in str(p).lower()]
+        if rows:
+            hit += len(rows)
+            t = _table("engagement", "stamp", "path", title="reports")
+            for p in sorted(rows)[:30]:
+                t.add_row(p.parent.name, p.name, str(p))
+            con.print(t)
+
+    if not hit:
+        con.print(f"[dim]no matches for {text!r}[/dim]")
+
+
+# ── noun shortcuts ────────────────────────────────────────────────────────
+@app.command()
+def client(id: str = typer.Argument("", help="client slug; omit to list")):  # noqa: A002
+    """List clients, or show one client's retest + remediation status."""
+    _show_client(id) if id else _list_clients()
+
+
+@app.command()
+def engagement(id: str = typer.Argument("", help="engagement slug; omit to list")):  # noqa: A002
+    """List engagements, or show one engagement's runs and findings."""
+    _show_engagement(id) if id else _list_engagements()
+
+
+@app.command()
+def link(engagement: str, client: str):
+    """Attach an existing ENGAGEMENT to a CLIENT record."""
+    if not db.get_client(client):
+        err.print(f"[red]no client '{client}'[/red] — `ronin new client --name …`")
+        raise typer.Exit(1)
+    db.set_engagement_client(engagement, client)
+    con.print(f"[green]linked[/green] {engagement} → {client}")
+
+
+# ══════════════════════════════════════════════════════════════════ making
+@new_app.command("client")
+def new_client(
     name: str = typer.Option(..., help="client / organisation name"),
     slug: str = typer.Option("", help="short id (default: slugified name)"),
     contact: str = typer.Option("", help="primary contact name"),
@@ -136,192 +344,345 @@ def client_new(
     cadence_days: int = typer.Option(0, help="retest reminder interval; 0 = none"),
 ):
     """Add a recurring client with an optional retest cadence."""
-    slug = slug or _slugify(name)
+    slug = slug or _slug(name)
     db.upsert_client(Client(slug=slug, name=name, contact_name=contact,
                             contact_email=email, cadence_days=cadence_days))
     con.print(f"[green]client[/green] [bold]{slug}[/bold] saved"
               + (f"  (retest every {cadence_days}d)" if cadence_days else ""))
 
 
-@client_app.command("list")
-def client_list():
-    """List clients with engagement counts and retest status."""
-    rows = db.list_clients()
-    if not rows:
-        con.print("no clients yet - `ronin client new --name \"Acme\" --cadence-days 180`")
-        return
-    t = Table(header_style="bold")
-    for c in ("slug", "name", "contact", "engagements", "last tested", "next due", "remediation"):
-        t.add_column(c)
-    for cl in rows:
-        p = db.client_progress(cl.slug)
-        due = p["next_due"].strftime("%Y-%m-%d") if p["next_due"] else "-"
-        if p["overdue"]:
-            due = f"[red]{due} !"
-        prog = f"{p['progress_pct']}%" if p["progress_pct"] is not None else "-"
-        t.add_row(cl.slug, cl.name, cl.contact_name or "-", str(p["engagements"]),
-                  p["last_tested"].strftime("%Y-%m-%d") if p["last_tested"] else "-",
-                  due, prog)
+@new_app.command("engagement")
+def new_engagement(
+    client: str = typer.Option(..., help="client / organisation name"),
+    tester: str = typer.Option("", help="your name (defaults to $USER)"),
+    slug: str = typer.Option("", help="short id; default: <client>-<date>"),
+    days: int = typer.Option(14, help="testing-window length from today"),
+    client_slug: str = typer.Option("", "--client-slug", help="link to a `ronin client` record"),
+):
+    """Create an engagement and scaffold its scope.yaml."""
+    import getpass
+
+    tester = tester or getpass.getuser()
+    if client_slug and not db.get_client(client_slug):
+        con.print(f"[yellow]no client '{client_slug}' yet[/yellow]")
+    slug = slug or f"{_slug(client)}-{_dt.date.today():%Y%m%d}"
+    db.upsert_engagement(Engagement(slug=slug, client=client, tester=tester, client_slug=client_slug))
+    sf = paths().scope_file(slug)
+    if not sf.exists():
+        end = _dt.date.today() + _dt.timedelta(days=days)
+        sf.write_text(SCOPE_TEMPLATE.format(client=client, slug=slug, tester=tester,
+                                            start=_dt.date.today(), end=end))
+    con.print(f"[green]created[/green] engagement [bold]{slug}[/bold]  ·  scope: {sf}")
+    con.print(f"  edit in_scope, then:  [cyan]ronin run nmap -e {slug} -t <host>[/cyan]")
+
+
+# ══════════════════════════════════════════════════════════════════ toolchain
+@app.command()
+def doctor(
+    install: bool = typer.Option(False, "--install", help="install what's missing"),
+    only: str = typer.Option("", help="comma list of tools to act on"),
+    all_: bool = typer.Option(False, "--all", help="also show the extended (addable) catalog"),
+    dry_run: bool = typer.Option(False, help="print commands without running them"),
+):
+    """Show the offensive toolchain; optionally install what's missing."""
+    from ronin.doctor import install as do_install
+    from ronin.doctor import survey
+
+    rows = survey(include_extended=all_)
+    t = _table("tool", "category", "adapter", "active", "status", title="RoninSuite toolchain")
+    for s in rows:
+        t.add_row(s.name, s.category, "core" if s.has_adapter else ("add" if s.extended else "·"),
+                  "[red]yes[/red]" if s.aggressive else "·",
+                  f"[green]{s.path}[/green]" if s.installed else "[yellow]missing[/yellow]")
     con.print(t)
-
-
-@client_app.command("link")
-def client_link(engagement: str, client_slug: str):
-    """Attach an existing ENGAGEMENT to a CLIENT record."""
-    if not db.get_client(client_slug):
-        con.print(f"[red]no client '{client_slug}'[/red]")
-        raise typer.Exit(1)
-    db.set_engagement_client(engagement, client_slug)
-    con.print(f"[green]linked[/green] {engagement} -> {client_slug}")
+    con.print(f"{sum(s.installed for s in rows)}/{len(rows)} installed  ·  "
+              f"adapters: {sum(s.has_adapter for s in rows)}")
+    if install:
+        wanted = [x.strip() for x in only.split(",") if x.strip()] or \
+                 [s.name for s in rows if not s.installed]
+        con.print(f"\n[bold]installing:[/bold] {', '.join(wanted)}")
+        for n, o in do_install(wanted, dry_run=dry_run).items():
+            c = "green" if o in ("installed", "updated") or "already" in o else "yellow"
+            con.print(f"  [{c}]{n}: {o}[/{c}]")
 
 
 @app.command()
-def updates(check: bool = typer.Option(False, "--check", help="run an online check now"),
-            offline: bool = typer.Option(False, help="skip network lookups")):
-    """Show toolchain currency (installed vs latest, pacman updates, template age)."""
+def add(
+    tools: list[str] = typer.Argument(None, help="tool name(s) to install"),
+    list_: bool = typer.Option(False, "--list", help="list what's addable"),
+    category: str = typer.Option("", help="filter --list by category"),
+    search: str = typer.Option("", help="filter --list by text"),
+    dry_run: bool = typer.Option(False, help="print commands without running them"),
+):
+    """Install pentest tool(s) from the core or extended (awesome-list) catalog."""
+    from ronin.data.extended_tools import EXTENDED, categories
+    from ronin.doctor import catalog_lookup
+    from ronin.doctor import install as do_install
+    from ronin.tools.registry import CATALOG
+
+    if list_ or not tools:
+        t = _table("tool", "category", "src", "installed", "description",
+                   title="addable tools")
+        import shutil
+
+        allrows = [(n, m["category"], "core",
+                    (CATALOG[n].get("binary", n)), "") for n, m in CATALOG.items()]
+        allrows += [(n, m["category"], "add", m.get("binary", n), m["desc"])
+                    for n, m in EXTENDED.items()]
+        for n, cat, src, binary, desc in sorted(allrows):
+            if category and cat != category:
+                continue
+            if search and search.lower() not in f"{n} {cat} {desc}".lower():
+                continue
+            t.add_row(n, cat, src,
+                      "[green]yes[/green]" if shutil.which(binary) else "[dim]no[/dim]",
+                      desc[:64])
+        con.print(t)
+        con.print(f"categories: {', '.join(categories())}")
+        con.print("install:  [cyan]ronin add <name> [<name> …][/cyan]")
+        return
+
+    unknown = [x for x in tools if not catalog_lookup(x)]
+    if unknown:
+        err.print(f"[red]unknown:[/red] {', '.join(unknown)}  — try `ronin add --search <text>`")
+        raise typer.Exit(1)
+    con.print(f"[bold]installing:[/bold] {', '.join(tools)}  (sudo/yay may prompt)")
+    for n, o in do_install(list(tools), dry_run=dry_run).items():
+        c = "green" if o in ("installed",) or "already" in o or "cloned" in o else "yellow"
+        con.print(f"  [{c}]{n}: {o}[/{c}]")
+
+
+@app.command()
+def update(
+    tools: list[str] = typer.Argument(None, help="tool(s) to update; 'tools' = just show the table"),
+    all_: bool = typer.Option(False, "--all", help="update every outdated tool"),
+    yes: bool = typer.Option(False, "--yes", "-y", help="don't prompt"),
+    offline: bool = typer.Option(False, help="use the cached check, no network"),
+    dry_run: bool = typer.Option(False, help="print commands without running them"),
+):
+    """Update outdated tools.  `ronin update tools` shows the currency table."""
+    from ronin import updates as up
+    from ronin.doctor import update as do_update
+
+    tools = list(tools or [])
+    show_only = tools == ["tools"]
+    names = [] if show_only else tools
+
+    rep = up.cached() if offline else up.check(online=True)
+    if rep is None:
+        rep = up.check(online=not offline)
+
+    if show_only or not names:
+        t = _table("tool", "cat", "installed", "latest", "src", "status", title="toolchain currency")
+        for x in rep.tools:
+            t.add_row(x.name, x.category,
+                      x.installed_version or ("-" if x.installed else "not installed"),
+                      x.latest_version or "-", x.source,
+                      f"[{_ST_COL.get(x.status,'dim')}]{x.status}[/]")
+        con.print(t)
+        con.print(f"checked {rep.checked_at:%Y-%m-%d %H:%M}Z  ·  pacman: {len(rep.pacman_updates)}"
+                  f"  ·  nuclei templates: "
+                  f"{rep.nuclei_templates_age_days if rep.nuclei_templates_age_days is not None else '?'}d old")
+        if show_only:
+            return
+        names = [x.name for x in rep.outdated] or ([] if not all_ else [])
+        if not names:
+            con.print("[green]everything current[/green]")
+            return
+
+    if all_ and not names:
+        names = [x.name for x in rep.outdated]
+    if not names:
+        con.print("[green]nothing to update[/green]")
+        return
+    if not yes and not dry_run:
+        typer.confirm(f"update {', '.join(names)}?", abort=True)
+    for n, o in do_update(names, dry_run=dry_run).items():
+        c = "green" if o in ("updated", "refreshed") else "yellow"
+        con.print(f"  [{c}]{n}: {o}[/{c}]")
+
+
+@app.command()
+def sync(offline: bool = typer.Option(False, help="skip network, just re-read local state")):
+    """Refresh the update cache and nuclei templates."""
+    import shutil
+
     from ronin import updates as up
 
-    rep = up.check(online=not offline) if check else (up.cached() or up.check(online=not offline))
-    t = Table(title="Toolchain currency", header_style="bold")
-    for c in ("tool", "cat", "installed", "latest", "src", "status"):
-        t.add_column(c)
-    for x in rep.tools:
-        col = {"current": "green", "outdated": "yellow", "missing": "red"}.get(x.status, "dim")
-        t.add_row(x.name, x.category, x.installed_version or ("-" if x.installed else "not installed"),
-                  x.latest_version or "-", x.source, f"[{col}]{x.status}[/{col}]")
+    con.print("↻ checking toolchain currency…")
+    rep = up.check(online=not offline)
+    con.print(f"  {len(rep.outdated)} outdated · {len(rep.missing)} missing · "
+              f"pacman: {len(rep.pacman_updates)}")
+    if shutil.which("nuclei") and not offline:
+        con.print("↻ nuclei -update-templates…")
+        import subprocess
+
+        subprocess.run(["nuclei", "-update-templates", "-silent"])
+    con.print("[green]sync complete[/green] — see `ronin update tools`")
+
+
+# ══════════════════════════════════════════════════════════════════ renderers
+def _list_tools(cat: str = ""):
+    from ronin.tools.registry import adapters
+
+    t = _table("tool", "category", "installed", "active", "summary", title="adapters")
+    for n, a in adapters().items():
+        if cat and cat not in a.categories:
+            continue
+        t.add_row(n, ", ".join(a.categories),
+                  "[green]yes[/green]" if a.is_installed() else "[yellow]no[/yellow]",
+                  "[red]yes[/red]" if a.aggressive else "·", a.summary[:58])
     con.print(t)
-    con.print(f"checked: {rep.checked_at:%Y-%m-%d %H:%M UTC}  ·  "
-              f"pacman updates: {len(rep.pacman_updates)}  ·  "
-              f"nuclei templates age: "
-              f"{rep.nuclei_templates_age_days if rep.nuclei_templates_age_days is not None else '?'}d")
-    if rep.outdated:
-        con.print(f"[yellow]{len(rep.outdated)} outdated:[/yellow] "
-                  + ", ".join(x.name for x in rep.outdated)
-                  + "   -> ronin doctor --install --only <name>  (or update via the TUI)")
+    con.print("more tools: [cyan]ronin add --list[/cyan]")
 
 
-@app.command("scope")
-def scope_check(engagement: str, target: str):
-    """Check whether TARGET is in scope for ENGAGEMENT."""
-    sf = paths().scope_file(engagement)
-    if not sf.is_file():
-        con.print(f"[red]no scope file[/red] at {sf}")
-        raise typer.Exit(1)
-    d = Scope.load(sf).check(target)
-    colour = "green" if d.allowed else "red"
-    con.print(f"[{colour}]{'IN SCOPE' if d.allowed else 'OUT OF SCOPE'}[/{colour}] — {d.reason}")
-    if d.allowed and not d.within_window:
-        con.print("[yellow]note: outside the testing window[/yellow]")
-    raise typer.Exit(0 if d.allowed else 2)
+def _list_clients():
+    rows = db.list_clients()
+    if not rows:
+        con.print("no clients — `ronin new client --name \"Acme\" --cadence-days 180`")
+        return
+    t = _table("slug", "name", "contact", "engagements", "last tested", "next due", "remediated")
+    for c in rows:
+        p = db.client_progress(c.slug)
+        due = "-"
+        if p["next_due"]:
+            due = p["next_due"].strftime("%Y-%m-%d")
+            if p["overdue"]:
+                due = f"[red]{due} !"
+        t.add_row(c.slug, c.name, c.contact_name or "-", str(p["engagements"]),
+                  p["last_tested"].strftime("%Y-%m-%d") if p["last_tested"] else "never", due,
+                  f"{p['progress_pct']}%" if p["progress_pct"] is not None else "-")
+    con.print(t)
 
 
-# --------------------------------------------------------------------------- run
-@app.command()
-def run(
-    tool: str = typer.Argument(..., help="adapter name (see `ronin doctor`)"),
-    engagement: str = typer.Option(..., "--engagement", "-e"),
-    target: str = typer.Option(..., "--target", "-t"),
-    opt: list[str] = typer.Option([], "--opt", "-o", help="tool option k=v (repeatable)"),
-    intensity: str = typer.Option("normal", help="stealth | normal | aggressive"),
-    force: bool = typer.Option(False, help="run even if out of scope"),
-    reason: str = typer.Option("", help="written justification required with --force"),
-    yes: bool = typer.Option(False, "--yes", "-y", help="skip the confirmation prompt"),
-    no_report: bool = typer.Option(False, help="don't auto-generate reports afterwards"),
-):
-    """Run one TOOL against one TARGET, parse findings, and write reports."""
-    from ronin.core.runner import run_tool
-    from ronin.tools.registry import get
-
-    try:
-        adapter = get(tool)
-    except KeyError as e:
-        con.print(f"[red]{e}[/red]")
-        raise typer.Exit(1)
-
-    options = {}
-    for kv in opt:
-        if "=" not in kv:
-            con.print(f"[red]bad --opt {kv!r}, expected k=v[/red]")
-            raise typer.Exit(1)
-        k, v = kv.split("=", 1)
-        options[k] = _coerce(v)
-
-    scope = None
-    sf = paths().scope_file(engagement)
-    if sf.is_file():
-        scope = Scope.load(sf)
-    else:
-        con.print(f"[yellow]no scope file for {engagement}; scope checks skipped[/yellow]")
-
-    if adapter.aggressive and not yes:
-        typer.confirm(f"'{tool}' is an active/aggressive tool. Proceed against {target}?",
-                      abort=True)
-    if force and not reason:
-        con.print("[red]--force requires --reason[/red]")
-        raise typer.Exit(1)
-
-    con.print(f"[bold]running {tool}[/bold] → {target}  (engagement {engagement})")
-    try:
-        r = run_tool(adapter, engagement, target, options=options, intensity=intensity,
-                     scope=scope, force=force, force_reason=reason,
-                     on_line=lambda s, l: con.print(_line(s, l)))
-    except ScopeViolation as v:
-        con.print(f"[red]BLOCKED[/red] — {v.decision.reason}. "
-                  f"Use --force --reason '...' to override (logged).")
-        raise typer.Exit(2)
-    except FileNotFoundError as e:
-        con.print(f"[red]{e}[/red]")
-        raise typer.Exit(1)
-
-    finds = db.get_findings(engagement, r.id)
-    con.print(f"\n[bold]{len(finds)} findings[/bold]  status={r.status.value}  "
-              f"evidence={r.evidence_dir}")
-    _print_findings(finds)
-
-    if not no_report:
-        _do_report(engagement, run_id=r.id)
+def _list_engagements():
+    rows = db.list_engagements()
+    if not rows:
+        con.print("no engagements — `ronin new engagement --client \"Acme\"`")
+        return
+    t = _table("slug", "client", "linked", "tester", "created", "runs", "findings")
+    for e in rows:
+        t.add_row(e.slug, e.client, e.client_slug or "-", e.tester,
+                  e.created.strftime("%Y-%m-%d"),
+                  str(len(db.list_runs(e.slug))), str(len(db.get_findings(e.slug))))
+    con.print(t)
 
 
-# --------------------------------------------------------------------------- report
-@app.command()
-def report(
-    engagement: str,
-    run_id: Optional[str] = typer.Option(None, "--run", help="scope report to one run"),
-    level: str = typer.Option("all", help="executive | technical | remediation | all"),
-    fmt: str = typer.Option("md,html,pdf", "--format", help="comma list"),
-):
-    """(Re)generate the tiered reports for ENGAGEMENT from stored findings."""
-    _do_report(engagement, run_id=run_id, level=level, fmt=fmt)
+def _list_runs(eng: str):
+    rows = db.list_runs(eng)
+    if not rows:
+        con.print(f"[dim]no runs for {eng}[/dim]")
+        return
+    t = _table("id", "started", "tool", "target", "status", "findings")
+    for r in rows:
+        t.add_row(r.id, r.started.strftime("%Y-%m-%d %H:%M"), r.tool, r.target[:40],
+                  r.status.value, str(len(db.get_findings(eng, r.id))))
+    con.print(t)
 
 
-@app.command()
-def findings(engagement: str, severity: str = typer.Option("", help="filter, e.g. high")):
-    """List stored findings for ENGAGEMENT."""
-    fs = db.get_findings(engagement)
+def _list_reports(slug_filter: str = ""):
+    base = paths().reports
+    t = _table("engagement", "generated", "levels", "path", title="reports")
+    n = 0
+    for slug_dir in sorted(base.glob("*")):
+        if not slug_dir.is_dir() or (slug_filter and slug_filter not in slug_dir.name):
+            continue
+        for stamp in sorted(slug_dir.glob("*"), reverse=True):
+            if stamp.is_dir():
+                lv = ", ".join(sorted(p.stem for p in stamp.glob("*.md"))) or "-"
+                t.add_row(slug_dir.name, stamp.name, lv, str(stamp))
+                n += 1
+    con.print(t if n else "[dim]no reports generated yet[/dim]")
+
+
+def _list_findings(eng: str, severity: str, status: str):
+    fs = db.get_findings(eng)
     if severity:
         fs = [f for f in fs if f.severity.value == severity.lower()]
+    if status:
+        fs = [f for f in fs if getattr(f, "status", "open") == status.lower()]
     fs.sort(key=lambda f: (f.severity.rank, f.cvss_score or 0), reverse=True)
     _print_findings(fs, full=True)
 
 
-@app.command()
-def tui():
-    """Launch the RoninSuite TUI."""
-    from ronin.tui.app import run as run_tui
+def _show_client(slug: str):
+    p = db.client_progress(slug)
+    if not p["client"]:
+        err.print(f"[red]no client '{slug}'[/red]")
+        raise typer.Exit(1)
+    c = p["client"]
+    con.print(f"[bold cyan]{c.name}[/bold cyan]  ({c.slug})")
+    con.print(f"  contact   : {c.contact_name or '-'}  <{c.contact_email or 'no email'}>")
+    con.print(f"  cadence   : {str(c.cadence_days) + 'd' if c.cadence_days else 'none'}")
+    con.print(f"  last test : {p['last_tested'].strftime('%Y-%m-%d') if p['last_tested'] else 'never'}"
+              + (f"   next due: {p['next_due'].strftime('%Y-%m-%d')}" if p["next_due"] else "")
+              + ("  [red]OVERDUE[/red]" if p["overdue"] else ""))
+    con.print(f"  findings  : {p['findings_total']} total · {p['resolved']} resolved"
+              + (f" ({p['progress_pct']}%)" if p["progress_pct"] is not None else ""))
+    if p["open_by_severity"]:
+        con.print("  open      : " + "  ".join(
+            f"[{_SEV_COL.get(k,'')}]{k}:{v}[/]" for k, v in p["open_by_severity"].items()))
+    engs = db.list_engagements(slug)
+    if engs:
+        con.print("  engagements: " + ", ".join(e.slug for e in engs))
 
-    run_tui()
+
+def _show_engagement(slug: str):
+    e = db.get_engagement(slug)
+    if not e:
+        err.print(f"[red]no engagement '{slug}'[/red]")
+        raise typer.Exit(1)
+    con.print(f"[bold cyan]{e.slug}[/bold cyan]  ·  client {e.client}"
+              + (f"  ·  linked → {e.client_slug}" if e.client_slug else ""))
+    con.print(f"  tester {e.tester}  ·  created {e.created:%Y-%m-%d}  ·  "
+              f"scope: {paths().scope_file(slug)}")
+    _list_runs(slug)
+    _print_findings(sorted(db.get_findings(slug),
+                           key=lambda f: (f.severity.rank, f.cvss_score or 0), reverse=True))
 
 
-# --------------------------------------------------------------------------- helpers
+def _show_finding(fid: str):
+    for e in db.list_engagements():
+        for f in db.get_findings(e.slug):
+            if f.id == fid:
+                con.print(f"[bold]{f.title}[/bold]")
+                for k in ("engagement", "target", "severity", "status", "confidence", "tool"):
+                    con.print(f"  {k:11}: {getattr(f, k) if k != 'engagement' else e.slug}")
+                if f.cvss_score:
+                    con.print(f"  cvss       : {f.cvss_score} {f.cvss_vector or ''}")
+                if f.cve:
+                    con.print(f"  cve        : {', '.join(f.cve)}")
+                for label, val in (("description", f.description), ("evidence", f.evidence),
+                                   ("poc", f.poc), ("attack path", f.attack_path),
+                                   ("remediation", f.remediation)):
+                    if val:
+                        con.print(f"\n[u]{label}[/u]\n{val}")
+                return
+    err.print(f"[red]no finding '{fid}'[/red]")
+    raise typer.Exit(1)
+
+
+def _show_run(rid: str):
+    r = db.get_run(rid)
+    if not r:
+        err.print(f"[red]no run '{rid}'[/red]")
+        raise typer.Exit(1)
+    con.print(f"[bold]{r.tool}[/bold] → {r.target}   ({r.engagement})")
+    con.print(f"  status {r.status.value}  ·  exit {r.exit_code}  ·  "
+              f"{r.started:%Y-%m-%d %H:%M} for {r.duration_s or 0:.0f}s")
+    con.print(f"  argv: {' '.join(r.argv)}")
+    con.print(f"  evidence: {r.evidence_dir}")
+    _print_findings(db.get_findings(r.engagement, r.id))
+
+
+# ── shared helpers ───────────────────────────────────────────────────────
 def _coerce(v: str):
     low = v.lower()
     if low in ("true", "yes", "on"):
         return True
     if low in ("false", "no", "off"):
         return False
-    if v.isdigit():
-        return int(v)
-    return v
+    return int(v) if v.isdigit() else v
 
 
 def _line(stream: str, line: str) -> str:
@@ -329,25 +690,17 @@ def _line(stream: str, line: str) -> str:
     return f"{tag} {line}"
 
 
-_SEV_COL = {"critical": "bold red", "high": "red", "medium": "yellow",
-            "low": "cyan", "info": "dim"}
-
-
 def _print_findings(fs, full: bool = False):
     if not fs:
         con.print("[dim]no findings[/dim]")
         return
-    t = Table(header_style="bold", show_lines=full)
-    for c in ("severity", "cvss", "title", "target", "src"):
-        t.add_column(c)
+    t = _table("severity", "cvss", "status", "title", "target", "src")
     for f in fs:
-        t.add_row(
-            f"[{_SEV_COL.get(f.severity.value,'')}]{f.severity.value.upper()}[/]",
-            f"{f.cvss_score:.1f}" if f.cvss_score else "-",
-            f.title if full else (f.title[:70]),
-            f.target if full else (f.target[:40]),
-            f.tool,
-        )
+        t.add_row(f"[{_SEV_COL.get(f.severity.value,'')}]{f.severity.value.upper()}[/]",
+                  f"{f.cvss_score:.1f}" if f.cvss_score else "-",
+                  getattr(f, "status", "open"),
+                  f.title if full else f.title[:64],
+                  f.target if full else f.target[:38], f.tool)
     con.print(t)
 
 

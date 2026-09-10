@@ -1,7 +1,10 @@
-.PHONY: setup test run tui doctor lint bundle clean
+.PHONY: setup install test run tui doctor lint bundle clean
 
 setup:            ## install deps into .venv via uv
 	uv sync --extra dev
+
+install: setup    ## + put `ronin` on PATH (~/.local/bin symlink)
+	scripts/install-cli.sh
 
 test:             ## run the test suite
 	uv run pytest -q
