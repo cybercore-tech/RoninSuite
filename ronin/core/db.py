@@ -12,7 +12,7 @@ from contextlib import contextmanager
 from typing import Iterator
 
 from ronin.config import paths
-from ronin.core.models import Client, Engagement, Finding, ToolRun
+from ronin.core.models import Client, Engagement, Finding, Invoice, ToolRun
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS clients (
@@ -20,9 +20,29 @@ CREATE TABLE IF NOT EXISTS clients (
     name          TEXT NOT NULL,
     contact_name  TEXT DEFAULT '',
     contact_email TEXT DEFAULT '',
+    phone         TEXT DEFAULT '',
+    address       TEXT DEFAULT '',
+    website       TEXT DEFAULT '',
+    x             TEXT DEFAULT '',
+    facebook      TEXT DEFAULT '',
+    linkedin      TEXT DEFAULT '',
     notes         TEXT DEFAULT '',
     cadence_days  INTEGER DEFAULT 0,
+    rate          REAL DEFAULT 0,
     created       TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS invoices (
+    id          TEXT PRIMARY KEY,
+    client_slug TEXT NOT NULL,
+    number      TEXT DEFAULT '',
+    engagement  TEXT DEFAULT '',
+    issued      TEXT NOT NULL,
+    due         TEXT,
+    amount      REAL DEFAULT 0,
+    currency    TEXT DEFAULT 'USD',
+    status      TEXT DEFAULT 'draft',
+    description TEXT DEFAULT '',
+    created     TEXT NOT NULL
 );
 CREATE TABLE IF NOT EXISTS engagements (
     slug          TEXT PRIMARY KEY,
@@ -80,6 +100,13 @@ CREATE INDEX IF NOT EXISTS idx_find_fp  ON findings(engagement, fingerprint);
 _MIGRATIONS = [
     ("engagements", "client_slug", "TEXT DEFAULT ''"),
     ("findings", "status", "TEXT DEFAULT 'open'"),
+    ("clients", "phone", "TEXT DEFAULT ''"),
+    ("clients", "address", "TEXT DEFAULT ''"),
+    ("clients", "website", "TEXT DEFAULT ''"),
+    ("clients", "x", "TEXT DEFAULT ''"),
+    ("clients", "facebook", "TEXT DEFAULT ''"),
+    ("clients", "linkedin", "TEXT DEFAULT ''"),
+    ("clients", "rate", "REAL DEFAULT 0"),
 ]
 
 
@@ -107,16 +134,20 @@ def connect() -> Iterator[sqlite3.Connection]:
 
 
 # --- clients ---------------------------------------------------------------
+_CLIENT_COLS = ("slug", "name", "contact_name", "contact_email", "phone", "address",
+                "website", "x", "facebook", "linkedin", "notes", "cadence_days",
+                "rate", "created")
+
+
 def upsert_client(cl: Client) -> None:
+    vals = {**cl.model_dump(), "created": cl.created.isoformat()}
+    cols = [k for k in _CLIENT_COLS]
+    setters = ", ".join(f"{k}=excluded.{k}" for k in cols if k != "slug")
     with connect() as c:
         c.execute(
-            "INSERT INTO clients(slug,name,contact_name,contact_email,notes,cadence_days,created) "
-            "VALUES(?,?,?,?,?,?,?) ON CONFLICT(slug) DO UPDATE SET "
-            "name=excluded.name, contact_name=excluded.contact_name, "
-            "contact_email=excluded.contact_email, notes=excluded.notes, "
-            "cadence_days=excluded.cadence_days",
-            (cl.slug, cl.name, cl.contact_name, cl.contact_email, cl.notes,
-             cl.cadence_days, cl.created.isoformat()),
+            f"INSERT INTO clients({','.join(cols)}) VALUES({','.join('?' * len(cols))}) "
+            f"ON CONFLICT(slug) DO UPDATE SET {setters}",
+            tuple(vals[k] for k in cols),
         )
 
 
@@ -135,7 +166,71 @@ def list_clients() -> list[Client]:
 def delete_client(slug: str) -> None:
     with connect() as c:
         c.execute("UPDATE engagements SET client_slug='' WHERE client_slug=?", (slug,))
+        c.execute("DELETE FROM invoices WHERE client_slug=?", (slug,))
         c.execute("DELETE FROM clients WHERE slug=?", (slug,))
+
+
+# --- invoices (light; a full billing panel comes later, separate, in Rust) -----
+_INV_COLS = ("id", "client_slug", "number", "engagement", "issued", "due", "amount",
+             "currency", "status", "description", "created")
+
+
+def upsert_invoice(inv: Invoice) -> None:
+    d = inv.model_dump()
+    d["issued"] = inv.issued.isoformat()
+    d["due"] = inv.due.isoformat() if inv.due else None
+    d["created"] = inv.created.isoformat()
+    setters = ", ".join(f"{k}=excluded.{k}" for k in _INV_COLS if k != "id")
+    with connect() as c:
+        c.execute(
+            f"INSERT INTO invoices({','.join(_INV_COLS)}) VALUES({','.join('?' * len(_INV_COLS))}) "
+            f"ON CONFLICT(id) DO UPDATE SET {setters}",
+            tuple(d[k] for k in _INV_COLS),
+        )
+
+
+def get_invoice(inv_id: str) -> Invoice | None:
+    with connect() as c:
+        r = c.execute("SELECT * FROM invoices WHERE id=?", (inv_id,)).fetchone()
+    return Invoice(**dict(r)) if r else None
+
+
+def list_invoices(client_slug: str | None = None) -> list[Invoice]:
+    q = "SELECT * FROM invoices"
+    args: tuple = ()
+    if client_slug:
+        q += " WHERE client_slug=?"
+        args = (client_slug,)
+    q += " ORDER BY issued DESC"
+    with connect() as c:
+        rows = c.execute(q, args).fetchall()
+    return [Invoice(**dict(r)) for r in rows]
+
+
+def set_invoice_status(inv_id: str, status: str) -> None:
+    with connect() as c:
+        c.execute("UPDATE invoices SET status=? WHERE id=?", (status, inv_id))
+
+
+def delete_invoice(inv_id: str) -> None:
+    with connect() as c:
+        c.execute("DELETE FROM invoices WHERE id=?", (inv_id,))
+
+
+def invoice_totals(client_slug: str | None = None) -> dict:
+    """{count, drafts, billed, paid, outstanding, currency} for one client or all."""
+    invs = list_invoices(client_slug)
+    live = [i for i in invs if i.status != "void"]
+    billed = sum(i.amount for i in live)
+    paid = sum(i.amount for i in live if i.status == "paid")
+    return {
+        "count": len(invs),
+        "drafts": sum(1 for i in invs if i.status == "draft"),
+        "billed": round(billed, 2),
+        "paid": round(paid, 2),
+        "outstanding": round(billed - paid, 2),
+        "currency": (invs[0].currency if invs else "USD"),
+    }
 
 
 # --- key/value state ------------------------------------------------------------
@@ -348,4 +443,5 @@ def client_progress(slug: str) -> dict:
         "open_by_severity": sev_open,
         "resolved": resolved,
         "progress_pct": round(100 * resolved / total) if total else None,
+        "billing": invoice_totals(slug),
     }

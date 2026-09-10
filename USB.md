@@ -1,10 +1,13 @@
 # Running RoninSuite from a USB stick
 
-RoninSuite is built to be relocatable: every path it uses is resolved from a
-single project root (`$RONIN_HOME`, or the folder that contains `bin/ronin`), so
-you can copy the whole directory onto a stick and run it on another machine.
-Engagements, evidence, reports, the SQLite DB and the audit log all live under
-that root — i.e. on the stick, travelling with the data.
+RoninSuite is relocatable. `scripts/make-usb.sh` copies the code to the stick
+**and drops a `.ronin-portable` marker** — that marker tells `ronin/config.py` to
+keep all data (engagements, evidence, reports, `ronin.db`, `audit.log`) inside the
+stick folder, travelling with it.
+
+A normal system install has **no** marker, so its data lives in
+`~/.local/share/roninsuite` on the host, completely separate from any USB copy.
+`$RONIN_HOME` overrides both.
 
 ## 1. Put it on the stick
 

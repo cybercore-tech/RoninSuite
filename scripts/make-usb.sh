@@ -24,7 +24,8 @@ rsync -a --delete \
   --exclude '.git/' \
   "$SRC"/ "$OUT"/
 
-# recreate the runtime dirs so first run has somewhere to write
+# mark this copy as portable: config.py then keeps all data inside this folder
+touch "$OUT/.ronin-portable"
 mkdir -p "$OUT/engagements" "$OUT/reports"
 chmod +x "$OUT/bin/ronin" "$OUT/scripts/"*.sh 2>/dev/null || true
 

@@ -12,8 +12,19 @@ Everything you can call — the `ronin` CLI, the TUI keys, and the Python API.
 ## 1. CLI
 
 Install the launcher once: `scripts/install-cli.sh` (symlinks `bin/ronin` into
-`~/.local/bin`). After that everything is `ronin …` from anywhere — no
-`uv run`. `$RONIN_HOME` overrides the project root.
+`~/.local/bin`, and migrates any legacy in-repo data). After that everything is
+`ronin …` from anywhere — no `uv run`.
+
+**Where data lives** (`ronin/config.py` decides):
+
+1. `$RONIN_HOME` if set.
+2. **Portable / USB** — a `.ronin-portable` marker next to the code (dropped by
+   `scripts/make-usb.sh`) → data stays inside that folder, travelling with the stick.
+3. **System install** — `$XDG_DATA_HOME/roninsuite` (`~/.local/share/roninsuite`),
+   kept separate from the code checkout.
+
+So your system install and any USB build have **independent** engagements /
+reports / `ronin.db`.
 
 ### Overview
 
@@ -28,6 +39,7 @@ Install the launcher once: `scripts/install-cli.sh` (symlinks `bin/ronin` into
 | `ronin show <what> <id>` | `client` · `engagement` · `finding` · `run` · `report` |
 | `ronin search <text> [--type …]` | fuzzy match across findings, clients, engagements, tools, reports |
 | `ronin new client …` / `ronin new engagement …` | create records |
+| `ronin invoice new/list/status` | lightweight invoice tracking per client |
 | `ronin link <eng> <client>` | attach an engagement to a client |
 | `ronin client [<id>]` | list clients, or one client's retest + remediation status |
 | `ronin engagement [<id>]` | list engagements, or one engagement's runs + findings |
@@ -85,12 +97,28 @@ ronin show report <engagement>/<stamp>
 
 ```
 ronin new client --name "Acme Widgets LLC" [--slug acme] [--contact "J. Okafor"]
-                 [--email j@acme.example] [--cadence-days 90]
+                 [--email j@acme.example] [--phone …] [--address …] [--website …]
+                 [--x @acme] [--facebook …] [--linkedin …] [--rate 185]
+                 [--cadence-days 90]
 ronin new engagement --client "Acme Widgets LLC" [--slug acme-q3] [--tester raven]
                      [--days 14] [--client-slug acme]
 ```
-`--cadence-days` drives the "next due / overdue" reminders on the Dashboard and
-in `ronin client`.
+Re-running `new client` with the same slug **updates** it (only non-empty flags
+change). `--cadence-days` drives the "next due / overdue" reminders; `--rate` is a
+default unit rate for invoicing.
+
+### `ronin invoice`
+
+Lightweight tracking now; a full billing / invoice-generator / mail panel is
+planned as a separate Rust web app that shares this database.
+
+```
+ronin invoice new -c <client-slug> -a 8500 [--number INV-2026-014] [--engagement acme-q3]
+                  [--due 2026-10-01] [--currency USD] [--status draft|sent|paid|void] [-d "…"]
+ronin invoice list [<client-slug>]        # + billed / paid / outstanding totals
+ronin invoice status <id|prefix> paid     # draft | sent | paid | void
+```
+`ronin client <slug>` and `ronin list clients` show billed / paid / outstanding.
 
 ### `ronin add`
 
@@ -155,13 +183,18 @@ ronin doctor --install --dry-run
 | Key | Action |
 |---|---|
 | `1`–`6` | Dashboard · Tools · Reports · Clients · Updates · Toolbox |
+| `j` `k` `h` `l` | vim cursor move (down/up/left/right) — arrow keys also work |
+| `g` / `G` | jump to top / bottom · `ctrl+d` / `ctrl+u` half-page |
 | `e` | pick / create the active engagement |
+| `E` | open the active engagement's `scope.yaml` in `$EDITOR` / neovim (TUI suspends) |
 | `q` | quit · `ctrl+p` command palette |
 | `/` | (Tools) toggle the filter box |
 | `enter` | activate the selected row (configure a tool, open a detail) |
 | `s` | (Findings) cycle remediation status `open → in_progress → fixed → accepted → closed` |
+| `n` | (Clients) new client — or, on a highlighted row, edit it |
+| `v` | (Reports) open the selected `technical.md` in the editor |
 | `f` / `r` | (after a run) jump to Findings / Reports |
-| `o` | (Reports) open `index.html` in the browser |
+| `o` | (Reports) open `index.html` in the browser · `ctrl+g` generate |
 | `c` | (Updates) check now · `u` update selected |
 | `i` / `a` | (Toolbox) install selected / install all missing |
 | `escape` | back / close modal |
@@ -189,7 +222,7 @@ Import root is `ronin`. Public surface, module by module.
 | Object | Signature | Notes |
 |---|---|---|
 | `paths()` | `() -> Paths` | cached; project layout under the root |
-| `Paths.root` | `Path` | `$RONIN_HOME`, else the repo, else cwd |
+| `Paths.root` | `Path` | `$RONIN_HOME` → `.ronin-portable` folder → `~/.local/share/roninsuite` |
 | `Paths.db` / `.audit_log` / `.env_file` | `Path` | files at the root |
 | `Paths.engagements` / `.reports` / `.cache` | `Path` | dirs (created on access) |
 | `Paths.engagement_dir(slug)` | `-> Path` | |
@@ -208,7 +241,9 @@ Pydantic models + enums.
 | `Severity(str, Enum)` | `INFO LOW MEDIUM HIGH CRITICAL`; `.rank`; `Severity.from_score(float)` |
 | `RunStatus(str, Enum)` | `PENDING RUNNING OK ERROR TIMEOUT BLOCKED` |
 | `FindingStatus(str, Enum)` | `OPEN IN_PROGRESS FIXED ACCEPTED CLOSED`; `FindingStatus.cycle(current) -> str` |
-| `Client` | `slug name contact_name contact_email notes cadence_days created` |
+| `InvoiceStatus(str, Enum)` | `DRAFT SENT PAID VOID` |
+| `Client` | `slug name contact_name contact_email phone address website x facebook linkedin notes cadence_days rate created`; `.socials -> dict` |
+| `Invoice` | `id client_slug number engagement issued due amount currency status description created` |
 | `Engagement` | `slug client tester authorized_by created notes client_slug` |
 | `ToolRun` | `id engagement tool target argv status started finished exit_code evidence_dir result_files forced force_reason error`; `.duration_s` |
 | `Finding` | `id engagement run_id tool title target severity cvss_vector cvss_score confidence status description evidence request response poc attack_path remediation references cwe cve tags first_seen fingerprint`; `.finalize()` (fills CVSS-derived severity + fingerprint); `.merge(other)` |
@@ -240,7 +275,12 @@ Pydantic models + enums.
 ### `ronin.core.db`  (SQLite, one file at `paths().db`)
 
 Clients: `upsert_client(Client)` · `get_client(slug) -> Client|None` ·
-`list_clients() -> list[Client]` · `delete_client(slug)`.
+`list_clients() -> list[Client]` · `delete_client(slug)` (cascades invoices).
+
+Invoices: `upsert_invoice(Invoice)` · `get_invoice(id) -> Invoice|None` ·
+`list_invoices(client_slug=None) -> list[Invoice]` · `set_invoice_status(id, status)` ·
+`delete_invoice(id)` · `invoice_totals(client_slug=None) -> {count, drafts, billed,
+paid, outstanding, currency}`.
 
 Engagements: `upsert_engagement(Engagement)` · `upsert_engagement_stub(slug)` ·
 `get_engagement(slug)` · `list_engagements(client_slug=None) -> list[Engagement]` ·
@@ -253,7 +293,7 @@ Findings: `save_findings(list[Finding])` · `get_findings(engagement, run_id=Non
 `set_finding_status(finding_id, status)`.
 
 State + rollup: `set_state(key, value)` · `get_state(key, default="") -> str` ·
-`client_progress(slug) -> dict` with keys
+`client_progress(slug) -> dict` (adds `billing` = `invoice_totals(slug)`) with keys
 `client engagements last_tested next_due overdue findings_total status_mix
 open_by_severity resolved progress_pct`.
 
@@ -329,9 +369,12 @@ depth-parametrised) + `executive|technical|remediation.md.j2` + `report.html.j2`
 
 ## 4. On-disk layout
 
+Data root = `~/.local/share/roninsuite` (system install), the code folder if it
+carries a `.ronin-portable` marker (USB), or `$RONIN_HOME`.
+
 ```
-$RONIN_HOME/
-├── ronin.db                 SQLite: clients, engagements, runs, findings, state
+<data root>/
+├── ronin.db                 SQLite: clients, invoices, engagements, runs, findings, state
 ├── audit.log                append-only JSONL: scope decisions + every command
 ├── brand.yaml               optional report branding (brand.example.yaml → copy)
 ├── engagements/<slug>/

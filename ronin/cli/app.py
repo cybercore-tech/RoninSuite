@@ -29,13 +29,15 @@ from rich.table import Table
 
 from ronin.config import load_dotenv, paths
 from ronin.core import db
-from ronin.core.models import Client, Engagement
+from ronin.core.models import Client, Engagement, Invoice
 from ronin.core.scope import SCOPE_TEMPLATE, Scope, ScopeViolation
 
 app = typer.Typer(add_completion=False, no_args_is_help=False, rich_markup_mode="rich",
                   help="RoninSuite — portable offensive toolkit for Linux with tiered CVSS reporting.")
 new_app = typer.Typer(help="Create clients and engagements.")
+invoice_app = typer.Typer(help="Lightweight invoice tracking (full billing panel comes later).")
 app.add_typer(new_app, name="new")
+app.add_typer(invoice_app, name="invoice")
 con = Console()
 err = Console(stderr=True)
 
@@ -324,6 +326,61 @@ def engagement(id: str = typer.Argument("", help="engagement slug; omit to list"
     _show_engagement(id) if id else _list_engagements()
 
 
+@invoice_app.command("new")
+def invoice_new(
+    client: str = typer.Option(..., "--client", "-c", help="client slug"),
+    amount: float = typer.Option(..., "--amount", "-a"),
+    number: str = typer.Option("", help="human invoice number, e.g. INV-2026-014"),
+    engagement: str = typer.Option("", help="link to an engagement slug"),
+    due: str = typer.Option("", help="due date YYYY-MM-DD"),
+    currency: str = typer.Option("USD"),
+    status: str = typer.Option("draft", help="draft | sent | paid | void"),
+    description: str = typer.Option("", "--description", "-d"),
+):
+    """Record an invoice for a client."""
+    if not db.get_client(client):
+        err.print(f"[red]no client '{client}'[/red]")
+        raise typer.Exit(1)
+    inv = Invoice(client_slug=client, number=number, engagement=engagement,
+                  amount=amount, currency=currency, status=status, description=description,
+                  due=_dt.date.fromisoformat(due) if due else None)
+    db.upsert_invoice(inv)
+    con.print(f"[green]invoice[/green] {inv.number or inv.id[:8]}  {currency} {amount:,.2f}  "
+              f"[{status}]  → {client}")
+
+
+@invoice_app.command("list")
+def invoice_list(client: str = typer.Argument("", help="client slug; omit for all")):
+    """List invoices."""
+    invs = db.list_invoices(client or None)
+    if not invs:
+        con.print("[dim]no invoices[/dim]")
+        return
+    t = _table("id", "number", "client", "amount", "status", "issued", "due", "for")
+    for i in invs:
+        col = {"paid": "green", "sent": "yellow", "void": "dim"}.get(i.status, "cyan")
+        t.add_row(i.id[:8], i.number or "-", i.client_slug,
+                  f"{i.currency} {i.amount:,.2f}", f"[{col}]{i.status}[/]",
+                  str(i.issued), str(i.due) if i.due else "-",
+                  (i.engagement or i.description)[:28])
+    con.print(t)
+    tot = db.invoice_totals(client or None)
+    con.print(f"billed {tot['currency']} {tot['billed']:,.2f} · paid {tot['paid']:,.2f} · "
+              f"[yellow]outstanding {tot['outstanding']:,.2f}[/]")
+
+
+@invoice_app.command("status")
+def invoice_status(invoice_id: str, status: str):
+    """Set an invoice's status: draft | sent | paid | void  (id may be the short prefix)."""
+    inv = db.get_invoice(invoice_id) or next(
+        (x for x in db.list_invoices() if x.id.startswith(invoice_id)), None)
+    if not inv:
+        err.print(f"[red]no invoice '{invoice_id}'[/red]")
+        raise typer.Exit(1)
+    db.set_invoice_status(inv.id, status)
+    con.print(f"[green]{inv.number or inv.id[:8]}[/green] → {status}")
+
+
 @app.command()
 def link(engagement: str, client: str):
     """Attach an existing ENGAGEMENT to a CLIENT record."""
@@ -341,14 +398,33 @@ def new_client(
     slug: str = typer.Option("", help="short id (default: slugified name)"),
     contact: str = typer.Option("", help="primary contact name"),
     email: str = typer.Option("", help="primary contact email"),
+    phone: str = typer.Option("", help="phone number"),
+    address: str = typer.Option("", help="postal address"),
+    website: str = typer.Option("", help="website"),
+    x: str = typer.Option("", help="X / Twitter handle or URL"),
+    facebook: str = typer.Option("", help="Facebook page"),
+    linkedin: str = typer.Option("", help="LinkedIn page"),
+    rate: float = typer.Option(0.0, help="default hourly/day rate"),
     cadence_days: int = typer.Option(0, help="retest reminder interval; 0 = none"),
 ):
-    """Add a recurring client with an optional retest cadence."""
+    """Add / update a recurring client (contact, socials, rate, retest cadence)."""
     slug = slug or _slug(name)
-    db.upsert_client(Client(slug=slug, name=name, contact_name=contact,
-                            contact_email=email, cadence_days=cadence_days))
-    con.print(f"[green]client[/green] [bold]{slug}[/bold] saved"
-              + (f"  (retest every {cadence_days}d)" if cadence_days else ""))
+    existing = db.get_client(slug)
+    base = existing.model_dump() if existing else {}
+    base.update(dict(slug=slug, name=name, contact_name=contact or base.get("contact_name", ""),
+                     contact_email=email or base.get("contact_email", ""),
+                     phone=phone or base.get("phone", ""),
+                     address=address or base.get("address", ""),
+                     website=website or base.get("website", ""),
+                     x=x or base.get("x", ""), facebook=facebook or base.get("facebook", ""),
+                     linkedin=linkedin or base.get("linkedin", ""),
+                     rate=rate or base.get("rate", 0.0),
+                     cadence_days=cadence_days or base.get("cadence_days", 0)))
+    db.upsert_client(Client(**base))
+    con.print(f"[green]client[/green] [bold]{slug}[/bold] "
+              + ("updated" if existing else "saved")
+              + (f"  ·  retest every {base['cadence_days']}d" if base["cadence_days"] else "")
+              + (f"  ·  ${base['rate']:g}/unit" if base["rate"] else ""))
 
 
 @new_app.command("engagement")
@@ -658,7 +734,8 @@ def _list_clients():
     if not rows:
         con.print("no clients — `ronin new client --name \"Acme\" --cadence-days 180`")
         return
-    t = _table("slug", "name", "contact", "engagements", "last tested", "next due", "remediated")
+    t = _table("slug", "name", "contact", "engagements", "last tested", "next due",
+               "remediated", "outstanding")
     for c in rows:
         p = db.client_progress(c.slug)
         due = "-"
@@ -666,9 +743,12 @@ def _list_clients():
             due = p["next_due"].strftime("%Y-%m-%d")
             if p["overdue"]:
                 due = f"[red]{due} !"
+        b = p["billing"]
+        out = (f"[yellow]{b['currency']} {b['outstanding']:,.0f}[/]"
+               if b["outstanding"] else "-")
         t.add_row(c.slug, c.name, c.contact_name or "-", str(p["engagements"]),
                   p["last_tested"].strftime("%Y-%m-%d") if p["last_tested"] else "never", due,
-                  f"{p['progress_pct']}%" if p["progress_pct"] is not None else "-")
+                  f"{p['progress_pct']}%" if p["progress_pct"] is not None else "-", out)
     con.print(t)
 
 
@@ -729,8 +809,14 @@ def _show_client(slug: str):
         raise typer.Exit(1)
     c = p["client"]
     con.print(f"[bold cyan]{c.name}[/bold cyan]  ({c.slug})")
-    con.print(f"  contact   : {c.contact_name or '-'}  <{c.contact_email or 'no email'}>")
-    con.print(f"  cadence   : {str(c.cadence_days) + 'd' if c.cadence_days else 'none'}")
+    con.print(f"  contact   : {c.contact_name or '-'}  <{c.contact_email or 'no email'}>"
+              + (f"  ·  {c.phone}" if c.phone else ""))
+    if c.address:
+        con.print(f"  address   : {c.address}")
+    if c.socials:
+        con.print("  online    : " + "  ".join(f"{k}={v}" for k, v in c.socials.items()))
+    con.print(f"  rate      : {('$' + format(c.rate, 'g') + '/unit') if c.rate else '-'}"
+              f"   ·   cadence: {str(c.cadence_days) + 'd' if c.cadence_days else 'none'}")
     con.print(f"  last test : {p['last_tested'].strftime('%Y-%m-%d') if p['last_tested'] else 'never'}"
               + (f"   next due: {p['next_due'].strftime('%Y-%m-%d')}" if p["next_due"] else "")
               + ("  [red]OVERDUE[/red]" if p["overdue"] else ""))
@@ -739,9 +825,22 @@ def _show_client(slug: str):
     if p["open_by_severity"]:
         con.print("  open      : " + "  ".join(
             f"[{_SEV_COL.get(k,'')}]{k}:{v}[/]" for k, v in p["open_by_severity"].items()))
+    b = p["billing"]
+    if b["count"]:
+        con.print(f"  billing   : {b['currency']} {b['billed']:,.2f} billed · "
+                  f"{b['paid']:,.2f} paid · [yellow]{b['outstanding']:,.2f} outstanding[/] "
+                  f"({b['count']} invoice(s), {b['drafts']} draft)")
     engs = db.list_engagements(slug)
     if engs:
         con.print("  engagements: " + ", ".join(e.slug for e in engs))
+    invs = db.list_invoices(slug)
+    if invs:
+        con.print("\n  [dim]invoices:[/dim]")
+        for i in invs:
+            con.print(f"    {i.number or i.id[:8]:<16} {i.currency} {i.amount:>10,.2f}  "
+                      f"{i.status:<7} issued {i.issued}"
+                      + (f"  due {i.due}" if i.due else "")
+                      + (f"  — {i.description}" if i.description else ""))
 
 
 def _show_engagement(slug: str):

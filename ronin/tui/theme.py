@@ -50,11 +50,21 @@ CYBERCORE = Theme(
     },
 )
 
-# box-drawing wordmark
-BANNER = (
-    f"[{CYAN}]╦═╗╔═╗╔╗╔╦╔╗╔[/]  [{PURPLE}]╔═╗╦ ╦╦╔╦╗╔═╗[/]\n"
-    f"[{CYAN}]╠╦╝║ ║║║║║║║║[/]  [{PURPLE}]╚═╗║ ║║ ║ ║╣ [/]\n"
-    f"[{CYAN}]╩╚═╚═╝╝╚╝╩╝╚╝[/]  [{PURPLE}]╚═╝╚═╝╩ ╩ ╚═╝[/]"
+# cyberpunk wordmark - ANSI Shadow "RONIN", cyan→magenta gradient, with a
+# glitch strip + SUITE line under it.
+_RONIN = [
+    "██████╗  ██████╗ ███╗   ██╗██╗███╗   ██╗",
+    "██╔══██╗██╔═══██╗████╗  ██║██║████╗  ██║",
+    "██████╔╝██║   ██║██╔██╗ ██║██║██╔██╗ ██║",
+    "██╔══██╗██║   ██║██║╚██╗██║██║██║╚██╗██║",
+    "██║  ██║╚██████╔╝██║ ╚████║██║██║ ╚████║",
+    "╚═╝  ╚═╝ ╚═════╝ ╚═╝  ╚═══╝╚═╝╚═╝  ╚═══╝",
+]
+_GRAD = [CYAN, CYAN, "#3ad0ff", BLUE, "#8a4dff", PURPLE]
+BANNER = "\n".join(f"[{_GRAD[i]}]{ln}[/]" for i, ln in enumerate(_RONIN)) + (
+    f"\n[{BLUE}]▟▙▂▂▂▂▂▂▂▂▂▂▂▂▂[/]"
+    f"[{PURPLE}]  S U I T E  [/]"
+    f"[{BLUE}]▂▂▂▂▂▂▂▂▂▂▂▂▂▙▟[/]"
 )
 
 SEV_STYLE = {

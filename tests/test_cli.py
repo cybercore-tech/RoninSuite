@@ -83,3 +83,26 @@ def test_add_picker_flow(monkeypatch):
                         env={"COLUMNS": "220"}, input="1\n").output
     assert "select tools" in out
     assert "go install" in out or "pacman" in out or "would install" in out
+
+
+def test_new_client_fields_and_invoices():
+    assert r("new", "client", "--name", "Acme Widgets LLC", "--phone", "+1 555 0100",
+             "--website", "acme.example", "--x", "@acme", "--rate", "185",
+             "--cadence-days", "90").exit_code == 0
+    from ronin.core import db
+    c = db.get_client("acme-widgets-llc")
+    assert c.phone == "+1 555 0100" and c.rate == 185.0
+
+    assert r("invoice", "new", "-c", "acme-widgets-llc", "-a", "8500",
+             "--number", "INV-1", "--status", "sent").exit_code == 0
+    assert r("invoice", "new", "-c", "acme-widgets-llc", "-a", "6200",
+             "--status", "paid").exit_code == 0
+    lst = r("invoice", "list").output
+    assert "INV-1" in lst and "outstanding 8,500" in lst
+    assert "8,500" in r("client", "acme-widgets-llc").output          # billing in detail
+    assert "outstanding" in r("show", "client", "acme-widgets-llc").output
+
+
+def test_editor_resolution():
+    from ronin.tui.app import _editor
+    assert _editor()                                                  # non-empty list

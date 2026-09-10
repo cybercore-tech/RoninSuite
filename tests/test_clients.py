@@ -68,3 +68,37 @@ def test_state_kv():
     db.set_state("k", "v2")
     assert db.get_state("k") == "v2"
     assert db.get_state("missing", "d") == "d"
+
+
+def test_client_extended_fields_roundtrip():
+    from ronin.core.models import Client
+    db.upsert_client(Client(slug="acme", name="Acme", phone="+1 555 0100",
+                            website="acme.example", x="@acme", linkedin="company/acme",
+                            address="1 Main St", rate=185.0, cadence_days=90))
+    c = db.get_client("acme")
+    assert c.phone == "+1 555 0100" and c.rate == 185.0
+    assert c.socials == {"web": "acme.example", "x": "@acme", "in": "company/acme"}
+
+
+def test_invoices_and_totals():
+    import datetime as dt
+
+    from ronin.core.models import Client, Invoice
+    db.upsert_client(Client(slug="beta", name="Beta"))
+    db.upsert_invoice(Invoice(client_slug="beta", number="A1", amount=8500, status="sent",
+                              due=dt.date(2026, 10, 1)))
+    db.upsert_invoice(Invoice(client_slug="beta", number="A2", amount=6200, status="paid"))
+    db.upsert_invoice(Invoice(client_slug="beta", number="A3", amount=1000, status="draft"))
+    db.upsert_invoice(Invoice(client_slug="beta", number="A4", amount=9999, status="void"))
+
+    t = db.invoice_totals("beta")
+    assert t == {"count": 4, "drafts": 1, "billed": 15700.0, "paid": 6200.0,
+                 "outstanding": 9500.0, "currency": "USD"}
+    assert db.client_progress("beta")["billing"]["outstanding"] == 9500.0
+
+    inv = db.list_invoices("beta")[0]
+    db.set_invoice_status(inv.id, "paid")
+    assert db.get_invoice(inv.id).status == "paid"
+
+    db.delete_client("beta")
+    assert db.list_invoices("beta") == []          # cascade

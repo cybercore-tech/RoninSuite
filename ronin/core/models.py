@@ -75,8 +75,42 @@ class Client(BaseModel):
     name: str
     contact_name: str = ""
     contact_email: str = ""
+    phone: str = ""
+    address: str = ""
+    website: str = ""
+    x: str = ""                  # X / Twitter (handle or URL)
+    facebook: str = ""
+    linkedin: str = ""
     notes: str = ""
     cadence_days: int = 0        # 0 = no recurring retest reminder
+    rate: float = 0.0           # default hourly/day rate for quick invoicing
+    created: _dt.datetime = Field(default_factory=_now)
+
+    @property
+    def socials(self) -> dict[str, str]:
+        return {k: v for k, v in
+                (("web", self.website), ("x", self.x),
+                 ("fb", self.facebook), ("in", self.linkedin)) if v}
+
+
+class InvoiceStatus(str, enum.Enum):
+    DRAFT = "draft"
+    SENT = "sent"
+    PAID = "paid"
+    VOID = "void"
+
+
+class Invoice(BaseModel):
+    id: str = Field(default_factory=_uid)
+    client_slug: str
+    number: str = ""                       # human invoice number, e.g. INV-2026-014
+    engagement: str = ""                   # optional link to an engagement
+    issued: _dt.date = Field(default_factory=lambda: _dt.date.today())
+    due: _dt.date | None = None
+    amount: float = 0.0
+    currency: str = "USD"
+    status: str = "draft"                  # InvoiceStatus
+    description: str = ""
     created: _dt.datetime = Field(default_factory=_now)
 
 

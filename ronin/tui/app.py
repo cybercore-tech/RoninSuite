@@ -12,6 +12,7 @@ from pathlib import Path
 
 from textual import on, work
 from textual.app import App, ComposeResult
+from textual.binding import Binding
 from textual.containers import Horizontal, Vertical, VerticalScroll
 from textual.screen import ModalScreen, Screen
 from textual.widgets import (
@@ -31,6 +32,33 @@ from ronin.tui.theme import BANNER, CYBERCORE, SEV_STYLE, STATUS_STYLE
 
 def _slug(s: str) -> str:
     return re.sub(r"[^a-z0-9]+", "-", s.lower()).strip("-")
+
+
+def _num(s: str) -> bool:
+    try:
+        float(s)
+        return True
+    except (TypeError, ValueError):
+        return False
+
+
+def _editor() -> list[str]:
+    import os
+    import shutil
+
+    e = os.environ.get("EDITOR") or shutil.which("nvim") or shutil.which("vim") or "vi"
+    return e.split()
+
+
+def edit_file(app, path) -> None:
+    """Open PATH in $EDITOR / neovim, suspending the TUI while it runs."""
+    import subprocess
+
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with app.suspend():
+        subprocess.run([*_editor(), str(path)])
+    app.notify(f"edited {path.name}")
 
 
 def _ago(dt: _dt.datetime | None) -> str:
@@ -53,7 +81,8 @@ class TextPrompt(ModalScreen[dict | None]):
         self._fields = fields
 
     def compose(self) -> ComposeResult:
-        with Vertical(id="modal"):
+        box = VerticalScroll(id="modal") if len(self._fields) > 5 else Vertical(id="modal")
+        with box:
             yield Label(self._title, id="modal-title")
             for key, label, default in self._fields:
                 yield Label(label)
@@ -80,7 +109,14 @@ class TextPrompt(ModalScreen[dict | None]):
 
 
 class EngagementPicker(ModalScreen[str | None]):
-    BINDINGS = [("escape", "cancel", "Close"), ("n", "new", "New engagement")]
+    BINDINGS = [("escape", "cancel", "Close"), ("n", "new", "New engagement"),
+               ("E", "edit_scope", "Edit scope")]
+
+    def action_edit_scope(self) -> None:
+        t = self.query_one(DataTable)
+        if t.row_count:
+            slug = t.coordinate_to_cell_key(t.cursor_coordinate).row_key.value
+            edit_file(self.app, paths().scope_file(slug))
 
     def compose(self) -> ComposeResult:
         with Vertical(id="modal-wide"):
@@ -477,7 +513,7 @@ class Pane(Vertical):
 class DashboardPane(Pane):
     def compose(self) -> ComposeResult:
         yield Static(BANNER, id="banner")
-        yield Static("tactical & offensive · linux", id="banner-sub")
+        yield Static("// tactical · offensive · linux //", id="banner-sub")
         yield Rule()
         with Horizontal(id="dash-row"):
             yield Static(id="dash-context")
@@ -622,7 +658,17 @@ class ToolsPane(Pane):
 
 
 class ReportsPane(Pane):
-    BINDINGS = [("g", "generate", "Generate"), ("o", "open", "Open latest")]
+    BINDINGS = [("ctrl+g", "generate", "Generate"), ("o", "open", "Open selected"),
+               ("v", "view", "View .md in editor")]
+
+    def action_view(self) -> None:
+        t = self.query_one("#rep-table", DataTable)
+        if not t.row_count:
+            return
+        d = Path(t.coordinate_to_cell_key(t.cursor_coordinate).row_key.value)
+        md = d / "technical.md"
+        if md.exists():
+            edit_file(self.app, md)
 
     def compose(self) -> ComposeResult:
         yield Static("◈ REPORTS", id="rep-head")
@@ -722,10 +768,24 @@ class ClientsPane(Pane):
             return
         p = db.client_progress(slug)
         c = p["client"]
-        lines = [f"[b #00FFFF]{c.name}[/]  ·  {c.contact_name} <{c.contact_email or 'no email'}>",
-                 f"engagements: {p['engagements']}   last tested: {_ago(p['last_tested'])}"
-                 f"   next due: " + (p["next_due"].strftime("%Y-%m-%d") if p["next_due"] else "n/a")
-                 + ("  [#ff3b6b]OVERDUE[/]" if p["overdue"] else "")]
+        lines = [f"[b #00FFFF]{c.name}[/]  ·  {c.contact_name or '—'} "
+                 f"<{c.contact_email or 'no email'}>" + (f"  ·  {c.phone}" if c.phone else "")]
+        if c.address:
+            lines.append(f"addr: {c.address}")
+        if c.socials:
+            lines.append("online: " + "  ".join(f"{k}={v}" for k, v in c.socials.items()))
+        b = p["billing"]
+        if b["count"]:
+            lines.append(f"billing: {b['currency']} {b['billed']:,.0f} billed · "
+                         f"{b['paid']:,.0f} paid · "
+                         f"[#ffcf3f]{b['outstanding']:,.0f} outstanding[/] "
+                         f"({b['count']} inv, {b['drafts']} draft)")
+        elif c.rate:
+            lines.append(f"rate: ${c.rate:g}/unit   (no invoices yet)")
+        lines.append(
+            f"engagements: {p['engagements']}   last tested: {_ago(p['last_tested'])}"
+            f"   next due: " + (p["next_due"].strftime("%Y-%m-%d") if p["next_due"] else "n/a")
+            + ("  [#ff3b6b]OVERDUE[/]" if p["overdue"] else ""))
         mix = p["status_mix"]
         if mix:
             lines.append("remediation: " + "  ".join(
@@ -742,18 +802,34 @@ class ClientsPane(Pane):
 
     @work
     async def action_new(self) -> None:
-        res = await self.app.push_screen_wait(TextPrompt(
-            "◈ NEW CLIENT",
-            [("name", "Name", ""), ("contact", "Contact name", ""),
-             ("email", "Contact email", ""), ("cadence", "Retest every N days (0=none)", "0")]))
+        slug = self._sel_slug()
+        existing = db.get_client(slug) if slug else None  # 'n' on a row edits it
+        base = existing.model_dump() if existing else {}
+        f = [("name", "Name", base.get("name", "")),
+             ("contact", "Contact name", base.get("contact_name", "")),
+             ("email", "Contact email", base.get("contact_email", "")),
+             ("phone", "Phone", base.get("phone", "")),
+             ("address", "Address", base.get("address", "")),
+             ("website", "Website", base.get("website", "")),
+             ("x", "X / Twitter", base.get("x", "")),
+             ("facebook", "Facebook", base.get("facebook", "")),
+             ("linkedin", "LinkedIn", base.get("linkedin", "")),
+             ("rate", "Rate ($/unit, 0=none)", str(base.get("rate", 0) or 0)),
+             ("cadence", "Retest every N days (0=none)", str(base.get("cadence_days", 0) or 0))]
+        res = await self.app.push_screen_wait(
+            TextPrompt("◈ EDIT CLIENT" if existing else "◈ NEW CLIENT", f))
         if not res or not res["name"]:
             return
-        db.upsert_client(Client(
-            slug=_slug(res["name"]), name=res["name"], contact_name=res["contact"],
-            contact_email=res["email"],
+        base.update(dict(
+            slug=_slug(res["name"]) if not existing else existing.slug,
+            name=res["name"], contact_name=res["contact"], contact_email=res["email"],
+            phone=res["phone"], address=res["address"], website=res["website"],
+            x=res["x"], facebook=res["facebook"], linkedin=res["linkedin"],
+            rate=float(res["rate"] or 0) if _num(res["rate"]) else 0.0,
             cadence_days=int(res["cadence"]) if res["cadence"].isdigit() else 0))
+        db.upsert_client(Client(**base))
         self.refresh_data()
-        self.app.notify(f"client {res['name']} added")
+        self.app.notify(f"client {res['name']} {'updated' if existing else 'added'}")
 
     @on(Button.Pressed, "#cl-new")
     def _new_btn(self) -> None:
@@ -967,7 +1043,15 @@ class MainScreen(Screen):
     BINDINGS = [
         *[(str(i + 1), f"tab('{tid}')", name) for i, (name, tid, _) in enumerate(_TABS)],
         ("e", "engagement", "Engagement"),
+        ("E", "edit_scope", "Edit scope"),
     ]
+
+    def action_edit_scope(self) -> None:
+        if not self.app.engagement:
+            self.app.notify("no active engagement — press e", severity="warning")
+            return
+        edit_file(self.app, paths().scope_file(self.app.engagement))
+        self._refresh_active()
 
     def compose(self) -> ComposeResult:
         yield Header(show_clock=True)
@@ -1028,7 +1112,18 @@ class RoninApp(App):
     CSS_PATH = "app.tcss"
     TITLE = "RoninSuite"
     SUB_TITLE = "cybercore console"
-    BINDINGS = [("q", "quit", "Quit")]
+    BINDINGS = [
+        ("q", "quit", "Quit"),
+        # vim navigation (works alongside the arrow keys)
+        Binding("j", "vi('down')", "Down", show=False),
+        Binding("k", "vi('up')", "Up", show=False),
+        Binding("h", "vi('left')", "Left", show=False),
+        Binding("l", "vi('right')", "Right", show=False),
+        Binding("g", "vi('top')", "Top", show=False),
+        Binding("G", "vi('bottom')", "Bottom", show=False),
+        Binding("ctrl+d", "vi('half_down')", "½ page down", show=False),
+        Binding("ctrl+u", "vi('half_up')", "½ page up", show=False),
+    ]
 
     engagement: str | None = None
 
@@ -1037,6 +1132,44 @@ class RoninApp(App):
         self.register_theme(CYBERCORE)
         self.theme = "cybercore"
         self.push_screen(MainScreen())
+
+    def action_vi(self, direction: str) -> None:
+        """vim-style movement on whatever's focused (DataTable / OptionList / RichLog)."""
+        w = self.focused
+        from textual.widgets import DataTable, OptionList, RichLog
+
+        if isinstance(w, DataTable):
+            rc = w.row_count
+            if direction == "down":
+                w.action_cursor_down()
+            elif direction == "up":
+                w.action_cursor_up()
+            elif direction == "left":
+                w.action_cursor_left()
+            elif direction == "right":
+                w.action_cursor_right()
+            elif direction == "top":
+                w.move_cursor(row=0)
+            elif direction == "bottom":
+                w.move_cursor(row=max(0, rc - 1))
+            elif direction == "half_down":
+                w.action_page_down()
+            elif direction == "half_up":
+                w.action_page_up()
+        elif isinstance(w, OptionList):
+            fn = {"down": "cursor_down", "up": "cursor_up", "top": "first",
+                  "bottom": "last", "half_down": "page_down", "half_up": "page_up"}.get(direction)
+            if fn and hasattr(w, f"action_{fn}"):
+                getattr(w, f"action_{fn}")()
+        elif isinstance(w, RichLog):
+            if direction in ("down", "half_down"):
+                w.scroll_relative(y=1 if direction == "down" else 15)
+            elif direction in ("up", "half_up"):
+                w.scroll_relative(y=-1 if direction == "up" else -15)
+            elif direction == "top":
+                w.scroll_home()
+            elif direction == "bottom":
+                w.scroll_end()
 
     def set_engagement(self, slug: str | None) -> None:
         self.engagement = slug

@@ -1,13 +1,15 @@
 """Runtime paths and settings for RoninSuite.
 
-Everything is resolved relative to a single project root so the whole folder
-(code + engagements + reports + db) can be copied onto a USB stick and run from
-any Linux host.  Root resolution order:
+Data (engagements, reports, ronin.db, audit.log) lives under one root, resolved:
 
 1. ``$RONIN_HOME`` if set.
-2. The repository root that contains this ``ronin`` package (walk up until a
-   ``pyproject.toml`` or ``.git`` is found).
-3. The current working directory (last resort).
+2. **Portable / USB mode** - if a ``.ronin-portable`` marker sits next to the
+   code, the code folder IS the root, so everything travels with the stick
+   (``scripts/make-usb.sh`` drops that marker).
+3. **Legacy** - if ``ronin.db`` already sits in the code folder (pre-split
+   installs), keep using it in place.
+4. **System install** - ``$XDG_DATA_HOME/roninsuite`` (``~/.local/share/roninsuite``),
+   kept separate from the code checkout.
 """
 from __future__ import annotations
 
@@ -16,15 +18,27 @@ from functools import lru_cache
 from pathlib import Path
 
 
-def _detect_root() -> Path:
-    env = os.environ.get("RONIN_HOME")
-    if env:
-        return Path(env).expanduser().resolve()
+def _repo_dir() -> Path | None:
     here = Path(__file__).resolve()
     for parent in (here.parent, *here.parents):
         if (parent / "pyproject.toml").is_file() or (parent / ".git").exists():
             return parent
-    return Path.cwd().resolve()
+    return None
+
+
+def _detect_root() -> Path:
+    env = os.environ.get("RONIN_HOME")
+    if env:
+        return Path(env).expanduser().resolve()
+    repo = _repo_dir()
+    if repo is not None:
+        if (repo / ".ronin-portable").exists():
+            return repo                       # USB / portable — data travels with the folder
+        if (repo / "ronin.db").exists():
+            return repo                       # legacy in-repo data (pre-split)
+    xdg = os.environ.get("XDG_DATA_HOME")
+    base = Path(xdg).expanduser() if xdg else (Path.home() / ".local" / "share")
+    return (base / "roninsuite").resolve()
 
 
 class Paths:

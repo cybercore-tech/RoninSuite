@@ -7,7 +7,9 @@ set -eu
 
 SELF=$(readlink -f "$0" 2>/dev/null || realpath "$0" 2>/dev/null || echo "$0")
 ROOT=$(CDPATH= cd -- "$(dirname -- "$SELF")/.." && pwd)
-export RONIN_HOME="${RONIN_HOME:-$ROOT}"
+# Don't force RONIN_HOME: ronin/config.py decides (portable marker vs. system
+# ~/.local/share/roninsuite).  Honour it only if the caller already set one.
+[ -n "${RONIN_HOME:-}" ] && export RONIN_HOME || true
 
 # --- locate or install uv ----------------------------------------------------
 if command -v uv >/dev/null 2>&1; then
