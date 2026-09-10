@@ -127,6 +127,8 @@ def install_recipe(name: str, recipe: dict, *, dry_run: bool = False,
         if ok:
             return f"cloned to {dest} (not on PATH - run its script directly)"
     if ok:
+        if dry_run:
+            return "would update" if update else "would install"
         return "updated" if update else "installed"
     return "FAILED - install manually: " + str(recipe)
 

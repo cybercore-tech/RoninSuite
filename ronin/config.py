@@ -32,6 +32,11 @@ class Paths:
 
     def __init__(self, root: Path | None = None) -> None:
         self.root = root or _detect_root()
+        # a fresh $RONIN_HOME (e.g. first run, or a USB launcher) may not exist yet
+        try:
+            self.root.mkdir(parents=True, exist_ok=True)
+        except OSError:
+            pass
 
     # --- files ---------------------------------------------------------------
     @property
