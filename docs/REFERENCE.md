@@ -183,7 +183,8 @@ ronin doctor --install --dry-run
 | Key | Action |
 |---|---|
 | `1`–`6` | Dashboard · Tools · Reports · Clients · Updates · Toolbox |
-| `j` `k` `h` `l` | vim cursor move (down/up/left/right) — arrow keys also work |
+| `j` `k` | vim cursor move on the focused table (arrow keys also work) |
+| `h` `l` · `[` `]` | previous / next tab |
 | `g` / `G` | jump to top / bottom · `ctrl+d` / `ctrl+u` half-page |
 | `e` | pick / create the active engagement |
 | `E` | open the active engagement's `scope.yaml` in `$EDITOR` / neovim (TUI suspends) |

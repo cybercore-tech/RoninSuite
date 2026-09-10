@@ -81,12 +81,12 @@ class TextPrompt(ModalScreen[dict | None]):
         self._fields = fields
 
     def compose(self) -> ComposeResult:
-        box = VerticalScroll(id="modal") if len(self._fields) > 5 else Vertical(id="modal")
-        with box:
+        with Vertical(id="modal"):
             yield Label(self._title, id="modal-title")
-            for key, label, default in self._fields:
-                yield Label(label)
-                yield Input(value=default, id=f"f-{key}")
+            with VerticalScroll(id="modal-scroll"):
+                for key, label, default in self._fields:
+                    yield Label(label)
+                    yield Input(value=default, id=f"f-{key}")
             with Horizontal(id="modal-buttons"):
                 yield Button("OK", variant="primary", id="ok")
                 yield Button("Cancel", id="cancel")
@@ -1042,9 +1042,22 @@ _TABS = [
 class MainScreen(Screen):
     BINDINGS = [
         *[(str(i + 1), f"tab('{tid}')", name) for i, (name, tid, _) in enumerate(_TABS)],
+        Binding("l", "sib_tab(1)", "Next tab", show=False),
+        Binding("h", "sib_tab(-1)", "Prev tab", show=False),
+        Binding("]", "sib_tab(1)", "Next tab", show=False),
+        Binding("[", "sib_tab(-1)", "Prev tab", show=False),
         ("e", "engagement", "Engagement"),
         ("E", "edit_scope", "Edit scope"),
     ]
+
+    def action_sib_tab(self, delta: int) -> None:
+        tc = self.query_one(TabbedContent)
+        ids = [t[1] for t in _TABS]
+        try:
+            i = ids.index(tc.active)
+        except ValueError:
+            i = 0
+        tc.active = ids[(i + delta) % len(ids)]
 
     def action_edit_scope(self) -> None:
         if not self.app.engagement:
@@ -1114,11 +1127,10 @@ class RoninApp(App):
     SUB_TITLE = "cybercore console"
     BINDINGS = [
         ("q", "quit", "Quit"),
-        # vim navigation (works alongside the arrow keys)
+        # vim navigation on the focused table/list (arrow keys still work too);
+        # h / l (and [ / ]) switch tabs - see MainScreen.
         Binding("j", "vi('down')", "Down", show=False),
         Binding("k", "vi('up')", "Up", show=False),
-        Binding("h", "vi('left')", "Left", show=False),
-        Binding("l", "vi('right')", "Right", show=False),
         Binding("g", "vi('top')", "Top", show=False),
         Binding("G", "vi('bottom')", "Bottom", show=False),
         Binding("ctrl+d", "vi('half_down')", "½ page down", show=False),

@@ -189,11 +189,29 @@ TextPrompt, EngagementPicker, RunConfig, FindingDetail {
 }
 
 #modal {
-    width: 64;
+    width: 66;
     height: auto;
+    max-height: 92%;          /* frame never taller than the screen */
     padding: 1 2;
     background: $panel;
     border: thick $primary;
+}
+
+#modal-title { height: 1; }
+
+#modal-scroll {
+    height: auto;
+    max-height: 16;           /* long forms scroll inside here */
+}
+
+#modal-scroll Label { margin-top: 1; }
+#modal-scroll Label:first-of-type { margin-top: 0; }
+
+#modal-buttons {           /* always pinned, whatever the field count */
+    dock: bottom;
+    height: 3;
+    padding-top: 1;
+    background: $panel;
 }
 
 #modal-wide {
