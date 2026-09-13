@@ -17,6 +17,7 @@ import json
 import os
 import urllib.error
 import urllib.request
+import uuid as _uuid
 
 from ronin.core import db
 from ronin.core.models import Client
@@ -25,6 +26,9 @@ _UA = "roninsuite-sync/1"
 _K_URL = "sync.deck_url"
 _K_PULLED = "sync.customers_pulled_at"
 _K_PUSHED = "sync.pushed_at"
+_K_REPORTS = "sync.reports_pushed_at"
+
+_REPORT_EXT = ("md", "html", "pdf")
 
 
 class DeckError(RuntimeError):
@@ -40,6 +44,41 @@ def resolve(url: str | None, token: str | None) -> tuple[str, str]:
         raise DeckError("no Deck token — pass --token or set RONIN_DECK_TOKEN")
     db.set_state(_K_URL, url)
     return url, token
+
+
+def _multipart(fields: dict, *, file_field: str, filename: str,
+               content_type: str, data: bytes) -> tuple[str, bytes]:
+    """Build a multipart/form-data body with stdlib only."""
+    boundary = "----roninsuite-" + _uuid.uuid4().hex
+    crlf = b"\r\n"
+    buf = bytearray()
+    for k, v in fields.items():
+        buf += b"--" + boundary.encode() + crlf
+        buf += f'Content-Disposition: form-data; name="{k}"'.encode() + crlf + crlf
+        buf += str(v).encode() + crlf
+    buf += b"--" + boundary.encode() + crlf
+    buf += (f'Content-Disposition: form-data; name="{file_field}"; '
+            f'filename="{filename}"').encode() + crlf
+    buf += f"Content-Type: {content_type}".encode() + crlf + crlf
+    buf += data + crlf
+    buf += b"--" + boundary.encode() + b"--" + crlf
+    return f"multipart/form-data; boundary={boundary}", bytes(buf)
+
+
+def _post_multipart(url: str, token: str, content_type: str, body: bytes) -> dict:
+    r = urllib.request.Request(url, data=body, method="POST", headers={
+        "Authorization": f"Bearer {token}",
+        "User-Agent": _UA,
+        "Accept": "application/json",
+        "Content-Type": content_type,
+    })
+    try:
+        with urllib.request.urlopen(r, timeout=60) as resp:
+            return json.loads(resp.read() or b"{}")
+    except urllib.error.HTTPError as e:
+        raise DeckError(f"POST {url} -> HTTP {e.code}: {e.read()[:200].decode(errors='replace')}")
+    except urllib.error.URLError as e:
+        raise DeckError(f"POST {url} -> {e.reason}")
 
 
 def _req(method: str, url: str, token: str, body: dict | None = None) -> dict:
@@ -83,7 +122,7 @@ def pull_customers(base: str, token: str, *, full: bool = False) -> int:
 
 
 # ── push: RoninSuite engagements/findings/reports -> Deck ──────────────────
-def push_all(base: str, token: str) -> dict:
+def push_all(base: str, token: str, *, with_reports: bool = False) -> dict:
     engs, finds, reps, invs = [], [], [], []
     for iv in db.list_invoices():
         invs.append({
@@ -121,7 +160,45 @@ def push_all(base: str, token: str) -> dict:
     resp = _req("POST", f"{base}/api/v1/sync/push", token,
                 {"engagements": engs, "findings": finds, "reports": reps, "invoices": invs})
     db.set_state(_K_PUSHED, _now_iso())
+    if with_reports:
+        up = push_report_files(base, token)
+        resp["reports_uploaded"] = up["uploaded"]
+        resp["reports_upload_failed"] = up["failed"]
+        if up["errors"]:
+            resp.setdefault("conflicts", []).extend(up["errors"])
     return resp
+
+
+def push_report_files(base: str, token: str) -> dict:
+    """Upload the latest rendered report file per (engagement, level, format) so the
+    Deck client portal can serve them.  Metadata must already be on the Deck
+    (``push_all`` sends it); the sha256 links the file to its row."""
+    uploaded = failed = 0
+    errors: list[str] = []
+    for e in db.list_engagements():
+        for p in _latest_report_files(e.slug):
+            data = p.read_bytes()
+            fields = {
+                "engagement_slug": e.slug,
+                "level": p.stem,
+                "format": p.suffix.lstrip("."),
+                "sha256": hashlib.sha256(data).hexdigest(),
+            }
+            ctype = {
+                "pdf": "application/pdf",
+                "html": "text/html",
+                "md": "text/plain",
+            }.get(fields["format"], "application/octet-stream")
+            ct, body = _multipart(fields, file_field="file", filename=p.name,
+                                  content_type=ctype, data=data)
+            try:
+                _post_multipart(f"{base}/api/v1/sync/reports/file", token, ct, body)
+                uploaded += 1
+            except DeckError as ex:  # noqa: PERF203
+                failed += 1
+                errors.append(f"{e.slug}/{p.name}: {ex}")
+    db.set_state(_K_REPORTS, _now_iso())
+    return {"uploaded": uploaded, "failed": failed, "errors": errors}
 
 
 # ── helpers ───────────────────────────────────────────────────────────────
@@ -146,20 +223,36 @@ def _risk_rating(slug: str) -> str:
 
 
 def _reports_for(slug: str) -> list[dict]:
+    out = []
+    for p in _iter_report_files(slug):
+        out.append({
+            "engagement_slug": slug, "level": p.stem, "format": p.suffix.lstrip("."),
+            "filename": p.name,
+            "sha256": hashlib.sha256(p.read_bytes()).hexdigest(),
+            "bytes": p.stat().st_size,
+        })
+    return out
+
+
+def _iter_report_files(slug: str):
+    """Every rendered report file for an engagement, across all timestamps."""
     from ronin.config import paths
 
-    out = []
     base = paths().reports / slug
     if not base.is_dir():
-        return out
+        return
     for stamp in sorted(base.glob("*")):
-        for p in stamp.glob("*.*"):
-            if p.suffix.lstrip(".") not in ("md", "html", "pdf"):
-                continue
-            out.append({
-                "engagement_slug": slug, "level": p.stem, "format": p.suffix.lstrip("."),
-                "filename": p.name,
-                "sha256": hashlib.sha256(p.read_bytes()).hexdigest(),
-                "bytes": p.stat().st_size,
-            })
-    return out
+        for p in sorted(stamp.glob("*.*")):
+            if p.suffix.lstrip(".") in _REPORT_EXT:
+                yield p
+
+
+def _latest_report_files(slug: str):
+    """The newest file for each (level, format) — what the portal should serve."""
+    newest: dict[tuple[str, str], object] = {}
+    for p in _iter_report_files(slug):
+        key = (p.stem, p.suffix.lstrip("."))
+        cur = newest.get(key)
+        if cur is None or p.stat().st_mtime >= cur.stat().st_mtime:
+            newest[key] = p
+    return list(newest.values())

@@ -28,25 +28,25 @@ reports / `ronin.db`.
 
 ### Overview
 
-| Command | Purpose |
-|---|---|
-| `ronin` | launch the TUI |
-| `ronin help [command]` | overview, or help for one command |
-| `ronin run <tool> -t <target> [-e <eng>]` | run a scan → parse findings → write reports |
-| `ronin report [<eng>]` | (re)generate the three report tiers from stored findings |
-| `ronin scope <eng> <target>` | is this target in scope? (exit 0 / 2) |
-| `ronin list <what> [filter]` | `tools` · `clients` · `engagements` · `reports` · `runs` · `findings` |
-| `ronin show <what> <id>` | `client` · `engagement` · `finding` · `run` · `report` |
-| `ronin search <text> [--type …]` | fuzzy match across findings, clients, engagements, tools, reports |
-| `ronin new client …` / `ronin new engagement …` | create records |
-| `ronin invoice new/list/status` | lightweight invoice tracking per client |
-| `ronin link <eng> <client>` | attach an engagement to a client |
-| `ronin client [<id>]` | list clients, or one client's retest + remediation status |
-| `ronin engagement [<id>]` | list engagements, or one engagement's runs + findings |
-| `ronin doctor [--install] [--all]` | toolchain health; install what's missing |
-| `ronin add <tool> …` | install tool(s) from the core / extended catalog |
-| `ronin update [<tool> …]` | update outdated tools (`ronin update tools` shows the table) |
-| `ronin sync` | refresh the update cache + nuclei templates |
+| Command                                         | Purpose                                                               |
+| ----------------------------------------------- | --------------------------------------------------------------------- |
+| `ronin`                                         | launch the TUI                                                        |
+| `ronin help [command]`                          | overview, or help for one command                                     |
+| `ronin run <tool> -t <target> [-e <eng>]`       | run a scan → parse findings → write reports                           |
+| `ronin report [<eng>]`                          | (re)generate the three report tiers from stored findings              |
+| `ronin scope <eng> <target>`                    | is this target in scope? (exit 0 / 2)                                 |
+| `ronin list <what> [filter]`                    | `tools` · `clients` · `engagements` · `reports` · `runs` · `findings` |
+| `ronin show <what> <id>`                        | `client` · `engagement` · `finding` · `run` · `report`                |
+| `ronin search <text> [--type …]`                | fuzzy match across findings, clients, engagements, tools, reports     |
+| `ronin new client …` / `ronin new engagement …` | create records                                                        |
+| `ronin invoice new/list/status`                 | lightweight invoice tracking per client                               |
+| `ronin link <eng> <client>`                     | attach an engagement to a client                                      |
+| `ronin client [<id>]`                           | list clients, or one client's retest + remediation status             |
+| `ronin engagement [<id>]`                       | list engagements, or one engagement's runs + findings                 |
+| `ronin doctor [--install] [--all]`              | toolchain health; install what's missing                              |
+| `ronin add <tool> …`                            | install tool(s) from the core / extended catalog                      |
+| `ronin update [<tool> …]`                       | update outdated tools (`ronin update tools` shows the table)          |
+| `ronin sync`                                    | refresh the update cache + nuclei templates                           |
 
 ### `ronin run`
 
@@ -70,6 +70,7 @@ Example: `ronin run nuclei -t https://app.acme.example -o severity=medium,high,c
 ```
 ronin report [ENGAGEMENT] [--run RUN_ID] [--level executive|technical|remediation|all] [--format md,html,pdf]
 ```
+
 Regenerates from the findings DB — no re-scan. `--run` scopes to one run.
 
 ### `ronin list`
@@ -103,6 +104,7 @@ ronin new client --name "Acme Widgets LLC" [--slug acme] [--contact "J. Okafor"]
 ronin new engagement --client "Acme Widgets LLC" [--slug acme-q3] [--tester raven]
                      [--days 14] [--client-slug acme]
 ```
+
 Re-running `new client` with the same slug **updates** it (only non-empty flags
 change). `--cadence-days` drives the "next due / overdue" reminders; `--rate` is a
 default unit rate for invoicing.
@@ -118,6 +120,7 @@ ronin invoice new -c <client-slug> -a 8500 [--number INV-2026-014] [--engagement
 ronin invoice list [<client-slug>]        # + billed / paid / outstanding totals
 ronin invoice status <id|prefix> paid     # draft | sent | paid | void
 ```
+
 `ronin client <slug>` and `ronin list clients` show billed / paid / outstanding.
 
 ### `ronin add`
@@ -152,6 +155,7 @@ ronin update --all -y        # update outdated + install missing, no prompts
 ronin update --no-missing    # skip the "install missing" offer
 ronin update --offline       # prefer the cached check
 ```
+
 `nuclei` also triggers `-update-templates`. To only install missing tools without
 touching updates: `ronin add --missing`.
 
@@ -161,13 +165,19 @@ touching updates: `ronin add --missing`.
 ronin sync                                  # toolchain currency + nuclei templates
 ronin sync --remote https://subgridsec.org --token <tok>   # + SubgridSec Deck sync
 ronin sync --remote-only [--pull-only|--push-only] [--full]
+ronin sync --with-reports                    # also upload rendered report files for the client portal
 ```
 
 With a Deck configured (`--remote/--token`, or `RONIN_DECK_URL`/`RONIN_DECK_TOKEN`,
 or the persisted URL) it also **pulls customers** into `clients` and **pushes**
 engagement + finding summaries + report digests. Deck owns customers/invoices,
 RoninSuite owns engagements/findings; last-writer-wins on `updated_at`. Raw
-evidence never leaves the machine. See `~/.sysops/subgridsec-deck`.
+evidence never leaves the machine.
+
+`--with-reports` additionally uploads the newest rendered report file per
+(engagement, level, format) to `POST /api/v1/sync/reports/file`; the Deck matches
+each to its already-pushed metadata row by sha256 and serves it from the client
+portal. See `~/.sysops/subgridsec-deck`.
 
 ### `ronin doctor`
 
@@ -189,25 +199,25 @@ ronin doctor --install --dry-run
 
 `ronin` (no args). Cybercore theme, six tabs.
 
-| Key | Action |
-|---|---|
-| `1`–`6` | Dashboard · Tools · Reports · Clients · Updates · Toolbox |
-| `j` `k` | vim cursor move on the focused table (arrow keys also work) |
-| `h` `l` · `[` `]` | previous / next tab |
-| `g` / `G` | jump to top / bottom · `ctrl+d` / `ctrl+u` half-page |
-| `e` | pick / create the active engagement |
-| `E` | open the active engagement's `scope.yaml` in `$EDITOR` / neovim (TUI suspends) |
-| `q` | quit · `ctrl+p` command palette |
-| `/` | (Tools) toggle the filter box |
-| `enter` | activate the selected row (configure a tool, open a detail) |
-| `s` | (Findings) cycle remediation status `open → in_progress → fixed → accepted → closed` |
-| `n` | (Clients) new client — or, on a highlighted row, edit it |
-| `v` | (Reports) open the selected `technical.md` in the editor |
-| `f` / `r` | (after a run) jump to Findings / Reports |
-| `o` | (Reports) open `index.html` in the browser · `ctrl+g` generate |
-| `c` | (Updates) check now · `u` update selected |
-| `i` / `a` | (Toolbox) install selected / install all missing |
-| `escape` | back / close modal |
+| Key               | Action                                                                               |
+| ----------------- | ------------------------------------------------------------------------------------ |
+| `1`–`6`           | Dashboard · Tools · Reports · Clients · Updates · Toolbox                            |
+| `j` `k`           | vim cursor move on the focused table (arrow keys also work)                          |
+| `h` `l` · `[` `]` | previous / next tab                                                                  |
+| `g` / `G`         | jump to top / bottom · `ctrl+d` / `ctrl+u` half-page                                 |
+| `e`               | pick / create the active engagement                                                  |
+| `E`               | open the active engagement's `scope.yaml` in `$EDITOR` / neovim (TUI suspends)       |
+| `q`               | quit · `ctrl+p` command palette                                                      |
+| `/`               | (Tools) toggle the filter box                                                        |
+| `enter`           | activate the selected row (configure a tool, open a detail)                          |
+| `s`               | (Findings) cycle remediation status `open → in_progress → fixed → accepted → closed` |
+| `n`               | (Clients) new client — or, on a highlighted row, edit it                             |
+| `v`               | (Reports) open the selected `technical.md` in the editor                             |
+| `f` / `r`         | (after a run) jump to Findings / Reports                                             |
+| `o`               | (Reports) open `index.html` in the browser · `ctrl+g` generate                       |
+| `c`               | (Updates) check now · `u` update selected                                            |
+| `i` / `a`         | (Toolbox) install selected / install all missing                                     |
+| `escape`          | back / close modal                                                                   |
 
 Panes:
 
@@ -229,58 +239,58 @@ Import root is `ronin`. Public surface, module by module.
 
 ### `ronin.config`
 
-| Object | Signature | Notes |
-|---|---|---|
-| `paths()` | `() -> Paths` | cached; project layout under the root |
-| `Paths.root` | `Path` | `$RONIN_HOME` → `.ronin-portable` folder → `~/.local/share/roninsuite` |
-| `Paths.db` / `.audit_log` / `.env_file` | `Path` | files at the root |
-| `Paths.engagements` / `.reports` / `.cache` | `Path` | dirs (created on access) |
-| `Paths.engagement_dir(slug)` | `-> Path` | |
-| `Paths.scope_file(slug)` | `-> Path` | `engagements/<slug>/scope.yaml` |
-| `Paths.evidence_dir(slug, run_id)` | `-> Path` | |
-| `Paths.report_dir(slug, stamp)` | `-> Path` | |
-| `load_dotenv()` | `() -> None` | loads `.env` (env wins) |
-| `INTENSITY` | `dict` | `stealth`/`normal`/`aggressive` → nmap timing, rate, concurrency |
+| Object                                      | Signature     | Notes                                                                  |
+| ------------------------------------------- | ------------- | ---------------------------------------------------------------------- |
+| `paths()`                                   | `() -> Paths` | cached; project layout under the root                                  |
+| `Paths.root`                                | `Path`        | `$RONIN_HOME` → `.ronin-portable` folder → `~/.local/share/roninsuite` |
+| `Paths.db` / `.audit_log` / `.env_file`     | `Path`        | files at the root                                                      |
+| `Paths.engagements` / `.reports` / `.cache` | `Path`        | dirs (created on access)                                               |
+| `Paths.engagement_dir(slug)`                | `-> Path`     |                                                                        |
+| `Paths.scope_file(slug)`                    | `-> Path`     | `engagements/<slug>/scope.yaml`                                        |
+| `Paths.evidence_dir(slug, run_id)`          | `-> Path`     |                                                                        |
+| `Paths.report_dir(slug, stamp)`             | `-> Path`     |                                                                        |
+| `load_dotenv()`                             | `() -> None`  | loads `.env` (env wins)                                                |
+| `INTENSITY`                                 | `dict`        | `stealth`/`normal`/`aggressive` → nmap timing, rate, concurrency       |
 
 ### `ronin.core.models`
 
 Pydantic models + enums.
 
-| Object | Key fields / methods |
-|---|---|
-| `Severity(str, Enum)` | `INFO LOW MEDIUM HIGH CRITICAL`; `.rank`; `Severity.from_score(float)` |
-| `RunStatus(str, Enum)` | `PENDING RUNNING OK ERROR TIMEOUT BLOCKED` |
-| `FindingStatus(str, Enum)` | `OPEN IN_PROGRESS FIXED ACCEPTED CLOSED`; `FindingStatus.cycle(current) -> str` |
-| `InvoiceStatus(str, Enum)` | `DRAFT SENT PAID VOID` |
-| `Client` | `slug name contact_name contact_email phone address website x facebook linkedin notes cadence_days rate created`; `.socials -> dict` |
-| `Invoice` | `id client_slug number engagement issued due amount currency status description created` |
-| `Engagement` | `slug client tester authorized_by created notes client_slug` |
-| `ToolRun` | `id engagement tool target argv status started finished exit_code evidence_dir result_files forced force_reason error`; `.duration_s` |
-| `Finding` | `id engagement run_id tool title target severity cvss_vector cvss_score confidence status description evidence request response poc attack_path remediation references cwe cve tags first_seen fingerprint`; `.finalize()` (fills CVSS-derived severity + fingerprint); `.merge(other)` |
-| `Option` | `key label kind default choices help aggressive` — one tool knob |
-| `ScopeDecision` | `target allowed reason matched_rule within_window` |
-| `dedupe(list[Finding]) -> list[Finding]` | finalize + collapse by fingerprint, sort by severity/CVSS desc |
+| Object                                   | Key fields / methods                                                                                                                                                                                                                                                                    |
+| ---------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Severity(str, Enum)`                    | `INFO LOW MEDIUM HIGH CRITICAL`; `.rank`; `Severity.from_score(float)`                                                                                                                                                                                                                  |
+| `RunStatus(str, Enum)`                   | `PENDING RUNNING OK ERROR TIMEOUT BLOCKED`                                                                                                                                                                                                                                              |
+| `FindingStatus(str, Enum)`               | `OPEN IN_PROGRESS FIXED ACCEPTED CLOSED`; `FindingStatus.cycle(current) -> str`                                                                                                                                                                                                         |
+| `InvoiceStatus(str, Enum)`               | `DRAFT SENT PAID VOID`                                                                                                                                                                                                                                                                  |
+| `Client`                                 | `slug name contact_name contact_email phone address website x facebook linkedin notes cadence_days rate created`; `.socials -> dict`                                                                                                                                                    |
+| `Invoice`                                | `id client_slug number engagement issued due amount currency status description created`                                                                                                                                                                                                |
+| `Engagement`                             | `slug client tester authorized_by created notes client_slug`                                                                                                                                                                                                                            |
+| `ToolRun`                                | `id engagement tool target argv status started finished exit_code evidence_dir result_files forced force_reason error`; `.duration_s`                                                                                                                                                   |
+| `Finding`                                | `id engagement run_id tool title target severity cvss_vector cvss_score confidence status description evidence request response poc attack_path remediation references cwe cve tags first_seen fingerprint`; `.finalize()` (fills CVSS-derived severity + fingerprint); `.merge(other)` |
+| `Option`                                 | `key label kind default choices help aggressive` — one tool knob                                                                                                                                                                                                                        |
+| `ScopeDecision`                          | `target allowed reason matched_rule within_window`                                                                                                                                                                                                                                      |
+| `dedupe(list[Finding]) -> list[Finding]` | finalize + collapse by fingerprint, sort by severity/CVSS desc                                                                                                                                                                                                                          |
 
 ### `ronin.core.cvss`
 
-| Function | Signature |
-|---|---|
-| `base_score(vector)` | `(str) -> float` — CVSS v3.1 base score (raises `ValueError` on a bad vector) |
-| `severity_for(score)` | `(float) -> str` — band name |
-| `score_and_severity(vector)` | `(str) -> tuple[float, str]` |
-| `parse_vector(vector)` | `(str) -> dict[str, str]` |
-| `SEVERITY_BANDS` | tuple of `(lo, hi, name)` |
+| Function                     | Signature                                                                     |
+| ---------------------------- | ----------------------------------------------------------------------------- |
+| `base_score(vector)`         | `(str) -> float` — CVSS v3.1 base score (raises `ValueError` on a bad vector) |
+| `severity_for(score)`        | `(float) -> str` — band name                                                  |
+| `score_and_severity(vector)` | `(str) -> tuple[float, str]`                                                  |
+| `parse_vector(vector)`       | `(str) -> dict[str, str]`                                                     |
+| `SEVERITY_BANDS`             | tuple of `(lo, hi, name)`                                                     |
 
 ### `ronin.core.scope`
 
-| Object | Signature / notes |
-|---|---|
-| `Scope.load(path)` | `-> Scope` (raises `FileNotFoundError`) |
-| `Scope(data, path=None)` | `.client .tester .authorized_by .roe .in_scope .out_of_scope .window_start .window_end` |
-| `Scope.check(target)` | `-> ScopeDecision` |
-| `Scope.within_window(when=None)` | `-> bool` |
-| `ScopeViolation(RuntimeError)` | `.decision` |
-| `SCOPE_TEMPLATE` | str — scaffold for a new `scope.yaml` |
+| Object                           | Signature / notes                                                                       |
+| -------------------------------- | --------------------------------------------------------------------------------------- |
+| `Scope.load(path)`               | `-> Scope` (raises `FileNotFoundError`)                                                 |
+| `Scope(data, path=None)`         | `.client .tester .authorized_by .roe .in_scope .out_of_scope .window_start .window_end` |
+| `Scope.check(target)`            | `-> ScopeDecision`                                                                      |
+| `Scope.within_window(when=None)` | `-> bool`                                                                               |
+| `ScopeViolation(RuntimeError)`   | `.decision`                                                                             |
+| `SCOPE_TEMPLATE`                 | str — scaffold for a new `scope.yaml`                                                   |
 
 ### `ronin.core.db`  (SQLite, one file at `paths().db`)
 
@@ -320,6 +330,7 @@ Low-level: `connect()` context manager (schema + migrations applied on open).
 run_tool(adapter, engagement, target, *, options=None, intensity="normal",
          scope=None, force=False, force_reason="", timeout=None, on_line=None) -> ToolRun
 ```
+
 Scope-check → build argv → exec with per-line streaming (`on_line(stream, text)`,
 `stream ∈ {"out","err","sys"}`) → parse → dedupe → persist run + findings →
 audit. Raises `ScopeViolation` (blocked, not forced), `ValueError` (force without
@@ -327,10 +338,10 @@ reason), `FileNotFoundError` (tool binary missing).
 
 ### `ronin.tools.base`
 
-| Object | Notes |
-|---|---|
+| Object              | Notes                                                                                                                                                                                                                                                                                                |
+| ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `ToolAdapter` (ABC) | class attrs `name binary summary categories doc_url install aggressive default_timeout`; `is_installed() -> bool`; `options() -> list[Option]`; `option_defaults() -> dict`; **abstract** `build_argv(ctx) -> list[str]`, `parse(run, ctx) -> list[Finding]`; helper `_f(run, ctx, **kw) -> Finding` |
-| `RunContext` | `engagement target evidence_dir options intensity result_files`; `.out(name) -> Path` (registers a result file) |
+| `RunContext`        | `engagement target evidence_dir options intensity result_files`; `.out(name) -> Path` (registers a result file)                                                                                                                                                                                      |
 
 ### `ronin.tools.registry`
 
@@ -345,32 +356,32 @@ reason), `FileNotFoundError` (tool binary missing).
 
 ### `ronin.doctor`
 
-| Function | Signature |
-|---|---|
-| `survey(include_extended=False) -> list[ToolStatus]` | `ToolStatus(name category binary installed path has_adapter aggressive recipe extended desc)` |
-| `catalog_lookup(name) -> dict|None` | `{category recipe desc extended binary}` |
-| `install(names, *, dry_run=False) -> dict[str,str]` | outcome per tool |
-| `update(names, *, dry_run=False) -> dict[str,str]` | |
-| `install_recipe(name, recipe, *, dry_run=False, update=False) -> str` | run one recipe |
+| Function                                                              | Signature                                                                                     |
+| --------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| `survey(include_extended=False) -> list[ToolStatus]`                  | `ToolStatus(name category binary installed path has_adapter aggressive recipe extended desc)` |
+| `catalog_lookup(name) -> dict                                         | None`                                                                                         |
+| `install(names, *, dry_run=False) -> dict[str,str]`                   | outcome per tool                                                                              |
+| `update(names, *, dry_run=False) -> dict[str,str]`                    |                                                                                               |
+| `install_recipe(name, recipe, *, dry_run=False, update=False) -> str` | run one recipe                                                                                |
 
 ### `ronin.updates`
 
-| Function | Signature |
-|---|---|
-| `check(*, online=True) -> UpdateReport` | query GitHub / pacman, cache in `state` |
-| `cached() -> UpdateReport|None` | last cached check |
-| `UpdateReport` | `.tools .checked_at .nuclei_templates_age_days .pacman_updates`; `.outdated`, `.missing` |
-| `ToolUpdate` | `name category installed installed_version latest_version source status note` |
+| Function                                | Signature                                                                                |
+| --------------------------------------- | ---------------------------------------------------------------------------------------- |
+| `check(*, online=True) -> UpdateReport` | query GitHub / pacman, cache in `state`                                                  |
+| `cached() -> UpdateReport               | None`                                                                                    |
+| `UpdateReport`                          | `.tools .checked_at .nuclei_templates_age_days .pacman_updates`; `.outdated`, `.missing` |
+| `ToolUpdate`                            | `name category installed installed_version latest_version source status note`            |
 
 ### `ronin.reports.render`
 
-| Function | Signature |
-|---|---|
-| `render(slug, *, run_id=None, levels=LEVELS, formats=FORMATS, out_dir=None) -> dict[str, dict[str, Path]]` | write MD/HTML/PDF for each level; returns `{level: {fmt: path}}` |
-| `build_context(slug, run_id=None) -> ReportContext` | the data the templates see |
-| `load_brand() -> dict` | reads `brand.yaml` (company, logo→data-URI, accent, classification, footer) |
-| `LEVELS` | `("executive", "technical", "remediation")` |
-| `FORMATS` | `("md", "html", "pdf")` |
+| Function                                                                                                   | Signature                                                                   |
+| ---------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
+| `render(slug, *, run_id=None, levels=LEVELS, formats=FORMATS, out_dir=None) -> dict[str, dict[str, Path]]` | write MD/HTML/PDF for each level; returns `{level: {fmt: path}}`            |
+| `build_context(slug, run_id=None) -> ReportContext`                                                        | the data the templates see                                                  |
+| `load_brand() -> dict`                                                                                     | reads `brand.yaml` (company, logo→data-URI, accent, classification, footer) |
+| `LEVELS`                                                                                                   | `("executive", "technical", "remediation")`                                 |
+| `FORMATS`                                                                                                  | `("md", "html", "pdf")`                                                     |
 
 Templates: `ronin/reports/templates/` — `_macros.md.j2` (the four sections,
 depth-parametrised) + `executive|technical|remediation.md.j2` + `report.html.j2`.

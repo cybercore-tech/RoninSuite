@@ -73,3 +73,44 @@ def test_push_all_shapes_payload(monkeypatch):
     assert b["findings"][0]["fingerprint"] and b["findings"][0]["severity"] == "critical"
     assert resp["engagements_upserted"] == 1
     assert db.get_state("sync.pushed_at")
+
+
+def test_multipart_builder_roundtrips():
+    ct, body = sr._multipart(
+        {"engagement_slug": "acme-q3", "level": "executive", "format": "pdf"},
+        file_field="file", filename="executive.pdf",
+        content_type="application/pdf", data=b"%PDF-1.4 hi",
+    )
+    boundary = ct.split("boundary=", 1)[1]
+    assert boundary in ct
+    text = body.decode("latin1")
+    assert f'--{boundary}\r\n' in text
+    assert 'name="engagement_slug"' in text and 'acme-q3' in text
+    assert 'filename="executive.pdf"' in text
+    assert "Content-Type: application/pdf" in text
+    assert "%PDF-1.4 hi" in text
+    assert body.rstrip().endswith(f"--{boundary}--".encode())
+
+
+def test_push_report_files_uploads(monkeypatch):
+    from ronin.config import paths
+
+    db.upsert_engagement(Engagement(slug="acme-rep", client="Acme", tester="raven",
+                                    client_slug="acme"))
+    rdir = paths().reports / "acme-rep" / "2026-09-10T00-00-00"
+    rdir.mkdir(parents=True)
+    (rdir / "executive.pdf").write_bytes(b"%PDF-1.4 exec")
+    (rdir / "technical.md").write_text("# technical")
+
+    calls = []
+    monkeypatch.setattr(
+        sr, "_post_multipart",
+        lambda url, token, ct, body: calls.append((url, ct, body)) or {"stored": True})
+
+    out = sr.push_report_files("https://deck.example", "tok")
+    assert out["uploaded"] == 2 and out["failed"] == 0
+    assert {u for u, _, _ in calls} == {"https://deck.example/api/v1/sync/reports/file"}
+    sent_levels = {b.decode("latin1").split('name="level"\r\n\r\n', 1)[1].split("\r\n", 1)[0]
+                   for _, _, b in calls}
+    assert sent_levels == {"executive", "technical"}
+    assert db.get_state("sync.reports_pushed_at")

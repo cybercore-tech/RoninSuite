@@ -16,3 +16,5 @@ __pycache__/
 /brand.yaml
 /tools/
 /.ronin-portable
+/data
+

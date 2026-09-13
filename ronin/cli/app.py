@@ -704,6 +704,8 @@ def sync(
     pull_only: bool = typer.Option(False, help="only pull customers from the Deck"),
     push_only: bool = typer.Option(False, help="only push engagements/findings to the Deck"),
     full: bool = typer.Option(False, help="pull every customer, ignore the last-pull cursor"),
+    with_reports: bool = typer.Option(
+        False, "--with-reports", help="also upload rendered report files for the client portal"),
     offline: bool = typer.Option(False, help="skip network, just re-read local state"),
 ):
     """Refresh the toolchain, and (if a Deck is configured) sync clients + findings."""
@@ -736,11 +738,13 @@ def sync(
                     n = sr.pull_customers(base, tok, full=full)
                     con.print(f"  pulled [green]{n}[/green] customer(s)")
                 if not pull_only:
-                    r = sr.push_all(base, tok)
+                    r = sr.push_all(base, tok, with_reports=with_reports)
                     con.print(f"  pushed [green]{r.get('engagements_upserted',0)}[/green] engagements · "
                               f"{r.get('findings_synced',0)} findings · "
                               f"{r.get('reports_recorded',0)} reports · "
                               f"{r.get('invoices_synced',0)} invoices"
+                              + (f" · [green]{r['reports_uploaded']}[/green] report file(s)"
+                                 if with_reports else "")
                               + (f"  ([yellow]{len(r['conflicts'])} conflict(s)[/yellow])"
                                  if r.get('conflicts') else ""))
                     for c in r.get("conflicts", []):

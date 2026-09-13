@@ -18,41 +18,49 @@ Remediation) driven by a normalized findings model with CVSS v3.1 scoring.
   **Tools** (catalog + configure/run/stream) · **Reports** · **Clients** ·
   **Updates** · **Toolbox**. Number keys `1–6` jump tabs, `e` picks the
   engagement, `/` filters a table.
+
 - **Clients & retest cadence** — a client record groups engagements, tracks the
   last test date, and (with a `cadence_days`) shows the next-due date and flags
   overdue retests. Per-client remediation progress rolls up from finding status.
+
 - **Finding status workflow** — `open → in progress → fixed → accepted → closed`,
   cycled with `s` in the findings view; feeds the Clients progress bars.
+
 - **Wraps real tools** through thin adapters. Each adapter builds a safe command,
   streams output live, and parses the tool's machine-readable results into one
   `Finding` schema (severity, CVSS vector + score, CWE/CVE, evidence,
   request/response, PoC, attack path, remediation).
+
 - **Enforces scope.** Per-engagement `scope.yaml` (in/out-of-scope hosts, CIDRs,
   domains, URL prefixes, testing window, rules of engagement). Out-of-scope
   targets are refused unless you `--force` with a written, logged justification.
+
 - **Reports in three tiers**, each containing the four sections you need:
+  
   1. Scope & Methodology
   2. Vulnerability Details (the findings)
   3. Proof of Concept (PoC) & Attack Paths
   4. Remediation Recommendations
-
+  
   rendered to **Markdown + HTML + PDF** under
   `reports/<engagement>/<timestamp>/`.
+
 - **Regenerates reports from stored findings** (SQLite) — no re-scan needed.
+
 - **Portable.** The whole folder runs from a USB stick; see `USB.md`.
 
 ## Tool catalog
 
 Wired adapters (parse output → normalized findings):
 
-| Phase | Tools |
-|---|---|
-| Recon | **subfinder** |
-| Scan | **nmap**, **naabu** |
-| Web content | **ffuf**, **feroxbuster** |
-| Vuln | **nuclei**, **nikto**, **testssl.sh** |
-| Exploitation *(active)* | **sqlmap**, **hydra**, **commix** |
-| Web probe | **httpx** |
+| Phase                   | Tools                                 |
+| ----------------------- | ------------------------------------- |
+| Recon                   | **subfinder**                         |
+| Scan                    | **nmap**, **naabu**                   |
+| Web content             | **ffuf**, **feroxbuster**             |
+| Vuln                    | **nuclei**, **nikto**, **testssl.sh** |
+| Exploitation *(active)* | **sqlmap**, **hydra**, **commix**     |
+| Web probe               | **httpx**                             |
 
 `ronin doctor` additionally knows install recipes for the rest of the offensive
 kit — amass, dnsx, katana, masscan, rustscan, whatweb, wafw00f, sslscan, wpscan,
