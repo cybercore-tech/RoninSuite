@@ -5,7 +5,7 @@ description = "RoninSuite - a portable TUI pentest toolkit for Linux (tactical &
 readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "MIT" }
-authors = [{ name = "RoninSuite" }]
+authors = [{ name = "darkstar" }]
 dependencies = [
     "textual>=0.79",
     "typer>=0.12",
