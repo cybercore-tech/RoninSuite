@@ -11,6 +11,36 @@ Remediation) driven by a normalized findings model with CVSS v3.1 scoring.
 
 > 🌐 **Project site:** [RoninSuite / Cybercore](https://cybercore-tech.github.io/RoninSuite/) · 💻 [Source on GitHub](https://github.com/cybercore-tech/RoninSuite)
 
+<details>
+<summary>🖼️ View the RoninSuite interface and sample reports</summary>
+
+<p align="center">
+  <img src="docs/assets/screenshots/dashboard.png" width="400" alt="RoninSuite dashboard with engagement context, findings, and recent activity">
+  <img src="docs/assets/screenshots/tool-catalog.png" width="400" alt="Integrated security tool catalog and run console">
+</p>
+<p align="center"><sub>Mission dashboard · Tool catalog</sub></p>
+
+<p align="center">
+  <img src="docs/assets/screenshots/client-tracking.png" width="400" alt="Client assessment history and remediation progress">
+  <img src="docs/assets/screenshots/findings.png" width="400" alt="Normalized findings with severity and status">
+</p>
+<p align="center"><sub>Client and retest cadence · Evidence to action</sub></p>
+
+<p align="center">
+  <img src="docs/assets/screenshots/updates.png" width="480" alt="Bundled toolchain and template update status">
+</p>
+<p align="center"><sub>Toolchain health</sub></p>
+
+<p align="center">
+  <img src="docs/assets/screenshots/report-executive.png" width="205" alt="Sample executive report page">
+  <img src="docs/assets/screenshots/report-technical.png" width="205" alt="Sample technical report page">
+  <img src="docs/assets/screenshots/report-remediation.png" width="205" alt="Sample remediation report page">
+</p>
+<p align="center"><sub>Sample executive · technical · remediation reports</sub></p>
+
+📋 The three report captures use fictional Acme Widgets sample data.
+</details>
+
 ---
 
 ## ✨ What it does
