@@ -1,0 +1,492 @@
+/*
+ * cybercomponents — shared UI component styles for the Cybercore Systems
+ * Framework: cards, status badges, data tables, form inputs, popup
+ * viewers, and the theme-picker dropdown itself.
+ *
+ * Colours come from the active CYBERGRID theme (--bg --fg --acid --pink
+ * --purple --cyan --orange --red --panel --line --muted, emitted per
+ * theme by each app's theme layer) and typography/spacing from
+ * cybertokens.css — nothing here is hardcoded. Swapping the theme
+ * repaints every component below with it.
+ *
+ * Promoted out of cyberdeck's static/ui.css (2026-09-17) once a second
+ * app (cyberdesk) needed the same cards/badges/tables/theme-picker —
+ * app-specific things (self-hosted fonts, backdrop scanline/glow
+ * effects, folder-tag chips) stayed local to cyberdeck rather than
+ * coming along; this file is deliberately just the reusable core.
+ *
+ * Load order:  reset  →  cybertokens.css  →  theme colours  →  cybercomponents.css
+ *
+ * v1.0.0
+ */
+
+* { box-sizing: border-box; }
+
+/* Author styles always beat the browser's default `[hidden]{display:none}`
+   UA rule regardless of selector specificity — without this, any element
+   that's both `[hidden]` AND has its own `display:` declaration (like
+   `.viewer-overlay{display:flex}` below) shows up whether or not the
+   `hidden` attribute is set, and toggling `el.hidden` in JS does nothing
+   visible. Keep this reset above every other rule in the file. */
+[hidden] { display: none !important; }
+
+html {
+  scrollbar-width: thin;
+  scrollbar-color: var(--purple) var(--bg);
+  /* Tells the browser to draw its OWN native widgets — the <input
+     type="color"> picker popup, native scrollbars, form control chrome —
+     in dark mode. Without this, that popup (which isn't our HTML/CSS at
+     all, it's the browser's own UI) defaults to a plain white background
+     no matter how dark the rest of the page is. */
+  color-scheme: dark;
+}
+
+body {
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--font-mono, monospace);
+  font-size: 13px;
+  margin: 0;
+  position: relative;
+}
+
+/* Uppercase, letter-spaced chrome text everywhere — the terminal/HUD feel
+   this family is going for. Scoped to real UI chrome (buttons, titlebars,
+   badges, card titles) rather than a blanket `body *` rule, so actual
+   content rendered in `.markdown-body` stays normal-case and readable as
+   prose, not shouted. */
+button, .btn-link, .btn-ghost, .titlebar-text, .card-title, .field-label {
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+/* --------------------------------------------------------------------------
+   Scrollbars — page and every internally-scrolling panel
+   -------------------------------------------------------------------------- */
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: var(--bg); }
+::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, var(--cyan), var(--purple));
+  border-radius: 5px;
+  border: 2px solid var(--bg);
+}
+::-webkit-scrollbar-thumb:hover { background: linear-gradient(180deg, var(--pink), var(--purple)); }
+::-webkit-scrollbar-corner { background: var(--bg); }
+
+/* --------------------------------------------------------------------------
+   Top bar
+   -------------------------------------------------------------------------- */
+.topbar {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 1rem 1.5rem;
+  border-bottom: 1px solid var(--line);
+  background: color-mix(in srgb, var(--bg) 85%, transparent);
+  backdrop-filter: blur(6px);
+  position: sticky; top: 0; z-index: 10;
+}
+.brand { font-weight: 700; font-size: 1.1rem; letter-spacing: 0.5px; text-shadow: 0 0 10px color-mix(in srgb, var(--pink) 50%, transparent); }
+.brand-accent { color: var(--cyan); text-shadow: 0 0 10px color-mix(in srgb, var(--cyan) 60%, transparent); }
+.topbar-right { display: flex; align-items: center; gap: 0.75rem; }
+.topbar-nav { display: flex; align-items: center; gap: 0.5rem; }
+
+/* --------------------------------------------------------------------------
+   Theme picker — a custom dropdown, not a native <select>. Chromium
+   forces its own system-blue highlight on the selected/hovered <option>
+   with zero author override available, which never matched the active
+   theme regardless of what CSS was tried against it.
+   -------------------------------------------------------------------------- */
+/* inline-block, not the div default of block — this only ever looked
+   right in the topbar by accident, because flex sizing there happens to
+   shrink a block child to its content width anyway. Anywhere it sits in
+   a plain block context, a block-level wrapper stretches to the full
+   width of its container, and `right: 0` on the dropdown then anchors to
+   that far edge instead of the button actually sitting at the start of
+   it. */
+.theme-dropdown-wrap { position: relative; display: inline-block; }
+#theme-picker-btn { text-transform: uppercase; letter-spacing: 0.3px; font-size: 0.78rem; gap: 0.4rem; }
+.caret-down { font-size: 0.65em; color: var(--muted); }
+/* position: fixed, not absolute — an ancestor with overflow:hidden clips
+   an absolutely-positioned descendant the moment it extends past that
+   ancestor's own bounds, which looks exactly like a z-index bug (the
+   dropdown appearing to vanish/get cut off) but isn't one. `fixed`
+   escapes that clipping since plain overflow:hidden alone doesn't
+   establish a containing block for it. top/left are set by JS
+   (toggleDropdown) from the button's real on-screen position; the values
+   below are just an unused fallback. */
+.theme-dropdown {
+  position: fixed; top: 0; left: 0; z-index: 1001;
+  width: 220px; max-height: 60vh; overflow-y: auto;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 3px;
+  box-shadow: 0 16px 40px rgba(0,0,0,0.5);
+  padding: 0.3rem 0;
+}
+.theme-group-label {
+  color: var(--cyan); font-weight: 700; font-size: 0.68rem; letter-spacing: 0.4px;
+  text-transform: uppercase; padding: 0.5rem 0.8rem 0.2rem;
+}
+.theme-item {
+  padding: 0.35rem 0.8rem; font-size: 0.78rem; text-transform: uppercase;
+  color: var(--fg); cursor: pointer; letter-spacing: 0.2px;
+  transition: background 0.1s ease, color 0.1s ease;
+}
+.theme-item:hover { background: color-mix(in srgb, var(--cyan) 16%, transparent); color: var(--cyan); }
+.theme-item.selected { background: color-mix(in srgb, var(--acid) 18%, transparent); color: var(--acid); font-weight: 700; }
+
+.btn-ghost {
+  background: transparent; color: var(--cyan); border: 1px solid var(--line);
+  padding: 0.4rem 0.8rem; border-radius: 3px; text-decoration: none; font-size: 0.85rem;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.btn-ghost:hover { border-color: var(--cyan); box-shadow: 0 0 10px color-mix(in srgb, var(--cyan) 30%, transparent); }
+.btn-ghost.active { color: var(--acid); border-color: var(--acid); }
+
+/* Deliberately no bare `main { ... }` rule here. That's page-shell
+   layout (max-width/centering/padding for the whole content area), not
+   a reusable component — it belongs to whatever app-shell each
+   consuming app already has (cyberdesk's own is a CSS grid with a
+   sidebar; `main` is already its 1fr column and doesn't need or want a
+   competing max-width/margin:auto fighting that). A version of this
+   file once had `main { max-width: 1300px; margin: 0 auto; padding:
+   1.5rem; }` — cyberdeck's own convention — and it silently broke every
+   existing cyberdesk page's layout (content capped and re-centered
+   instead of filling the grid column) the moment cyberdesk linked this
+   stylesheet in. Give a wrapper *class* (like cyberdesk's own `.wrap`)
+   this treatment in the consuming app instead, never the bare element
+   selector, in a file every app on the page links. */
+
+/* Page header pane — a calm dark panel (not itself saturated purple, so
+   it doesn't fight with the title pill sitting inside it). */
+.dash-head {
+  background: color-mix(in srgb, var(--panel) 55%, var(--bg));
+  border: 1px solid color-mix(in srgb, var(--purple) 30%, transparent);
+  border-radius: 4px;
+  padding: 1rem 1.25rem;
+  margin-bottom: 1.5rem;
+  box-shadow: 0 0 24px -8px color-mix(in srgb, var(--purple) 45%, transparent),
+              inset 0 1px 0 color-mix(in srgb, var(--fg) 6%, transparent);
+}
+/* The title itself is a real pill — a filled, bordered, glowing badge,
+   same visual weight as a .btn-link chip — not just glowing bare text. */
+.dash-head h1 {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin: 0 0 0.5rem;
+  padding: 0.15rem 0.65rem;
+  border-radius: 14px;
+  font-size: 0.82rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--purple);
+  background: linear-gradient(135deg, color-mix(in srgb, var(--purple) 24%, transparent), color-mix(in srgb, var(--purple) 8%, transparent));
+  border: 1px solid color-mix(in srgb, var(--purple) 50%, transparent);
+}
+.dash-head h1::before {
+  content: "◆";
+  font-size: 0.75em;
+  filter: drop-shadow(0 0 3px color-mix(in srgb, var(--purple) 80%, transparent));
+}
+@media (prefers-reduced-motion: no-preference) {
+  .dash-head h1 { animation: title-pulse 3s ease-in-out infinite; }
+  @keyframes title-pulse {
+    0%, 100% { box-shadow: 0 0 8px -2px color-mix(in srgb, var(--purple) 50%, transparent); }
+    50% { box-shadow: 0 0 16px 1px color-mix(in srgb, var(--purple) 80%, transparent); }
+  }
+}
+.dash-head p { font-size: 0.75rem; }
+.muted { color: var(--muted); }
+
+/* --------------------------------------------------------------------------
+   Category sections
+   -------------------------------------------------------------------------- */
+.cat-section { margin-top: 2rem; }
+.cat-head {
+  display: flex; align-items: baseline; gap: 0.6rem; margin-bottom: 0.75rem;
+  border-left: 3px solid var(--cat-color, var(--line));
+  padding-left: 0.6rem; padding-bottom: 0.4rem;
+  cursor: pointer; list-style: none; user-select: none;
+}
+.cat-head::-webkit-details-marker { display: none; }
+.cat-head h2 {
+  margin: 0; font-size: 1rem; letter-spacing: 0.4px; text-transform: uppercase;
+  color: var(--fg); text-shadow: 0 0 8px color-mix(in srgb, var(--purple) 35%, transparent);
+}
+.cat-count {
+  background: color-mix(in srgb, var(--cat-color, var(--muted)) 15%, transparent);
+  border: 1px solid var(--cat-color, var(--line));
+  color: var(--cat-color, var(--muted));
+  border-radius: 10px;
+  padding: 0.05rem 0.5rem;
+  font-size: 0.7rem;
+}
+.cat-caret {
+  display: inline-block; color: var(--cat-color, var(--muted));
+  transition: transform 0.15s ease; font-size: 0.8em;
+}
+details[open] > .cat-head .cat-caret { transform: rotate(90deg); }
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 1rem;
+}
+
+/* --------------------------------------------------------------------------
+   Cards — a soft sheen sweeps in on hover, plus a glow that matches
+   whatever status color the card is currently showing.
+   -------------------------------------------------------------------------- */
+.card {
+  --glow: var(--line);
+  background: var(--panel); border: 1px solid var(--line); border-radius: 3px;
+  padding: 1rem; position: relative; overflow: hidden;
+  transition: border-color 0.2s ease, box-shadow 0.25s ease;
+}
+.card::before {
+  content: ""; position: absolute; inset: -40% -40% auto -40%; height: 140%;
+  background: radial-gradient(ellipse at top, color-mix(in srgb, var(--glow) 15%, transparent), transparent 70%);
+  opacity: 0; transition: opacity 0.25s ease; pointer-events: none;
+}
+.card:hover { border-color: var(--glow); box-shadow: 0 10px 28px rgba(0,0,0,0.35), 0 0 24px color-mix(in srgb, var(--glow) 35%, transparent); }
+.card:hover::before { opacity: 1; }
+
+.card-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.4rem; position: relative; }
+.card-title { font-weight: 600; }
+.card-desc { font-size: 0.8rem; color: var(--muted); margin: 0 0 0.5rem; position: relative; }
+.card-meta { font-size: 0.72rem; margin: 0 0 0.7rem; position: relative; }
+.card-meta code {
+  background: var(--bg); border: 1px solid var(--line); padding: 0.1rem 0.35rem;
+  border-radius: 3px; color: var(--muted);
+}
+
+/* Status pills. `status-running`/`status-partial`/`status-stopped`/
+   `status-unknown` read naturally for live process status; PASS/FAIL/
+   WARN/UNKNOWN validation-gate style status maps onto the same four
+   (running≈pass, stopped≈n/a, partial≈warn, unknown≈unknown) rather than
+   inventing a parallel set of classes for the same four-color meaning. */
+.badge {
+  font-size: 0.7rem; font-weight: 700; padding: 0.2rem 0.5rem; border-radius: 3px;
+  letter-spacing: 0.4px; white-space: nowrap;
+}
+.status-running { background: rgba(0,0,0,0.2); color: var(--acid); border: 1px solid var(--acid); text-shadow: 0 0 6px color-mix(in srgb, var(--acid) 60%, transparent); }
+.status-partial { background: rgba(0,0,0,0.2); color: var(--orange); border: 1px solid var(--orange); text-shadow: 0 0 6px color-mix(in srgb, var(--orange) 60%, transparent); }
+.status-stopped { background: rgba(0,0,0,0.2); color: var(--muted); border: 1px solid var(--line); }
+.status-unknown { background: rgba(0,0,0,0.2); color: var(--red); border: 1px solid var(--red); text-shadow: 0 0 6px color-mix(in srgb, var(--red) 60%, transparent); }
+
+.card:has(.status-running) { --glow: var(--acid); }
+.card:has(.status-partial) { --glow: var(--orange); }
+.card:has(.status-unknown) { --glow: var(--red); }
+
+.card-actions { display: flex; flex-wrap: wrap; gap: 0.4rem; position: relative; }
+.card-actions button, .card-actions a.btn-link {
+  background: var(--bg); color: var(--cyan); border: 1px solid var(--line);
+  padding: 0.35rem 0.7rem; border-radius: 3px; font-family: inherit; font-size: 0.78rem;
+  cursor: pointer; text-decoration: none;
+  display: inline-flex; align-items: center; justify-content: center; line-height: 1.2;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, opacity 0.15s ease;
+}
+.card-actions button:hover, .card-actions a.btn-link:hover {
+  border-color: var(--cyan); box-shadow: 0 0 10px color-mix(in srgb, var(--cyan) 30%, transparent);
+}
+.card-actions button:disabled { opacity: 0.4; cursor: not-allowed; box-shadow: none; }
+
+/* .btn-link as a real standalone button, not just styled when nested
+   inside .card-actions — usable anywhere (a table cell, a plain
+   paragraph) as a small pill-shaped link/button. */
+.btn-link {
+  display: inline-flex; align-items: center; justify-content: center; line-height: 1.2;
+  background: color-mix(in srgb, var(--cyan) 12%, transparent);
+  color: var(--cyan); border: 1px solid color-mix(in srgb, var(--cyan) 45%, transparent);
+  padding: 0.22rem 0.6rem; border-radius: 3px; font-size: 0.72rem;
+  text-decoration: none; cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.btn-link:hover {
+  background: color-mix(in srgb, var(--cyan) 22%, transparent);
+  border-color: var(--cyan);
+  box-shadow: 0 0 10px color-mix(in srgb, var(--cyan) 30%, transparent);
+}
+
+/* --------------------------------------------------------------------------
+   Windows — a titlebar-and-dots chrome frame for grouping content
+   -------------------------------------------------------------------------- */
+.window {
+  background: var(--panel); border: 1px solid var(--line); border-radius: 4px; overflow: hidden;
+  box-shadow: 0 16px 40px rgba(0,0,0,0.45), inset 0 1px 0 color-mix(in srgb, var(--fg) 6%, transparent);
+  position: relative;
+}
+.window::before {
+  content: ""; position: absolute; inset: 0 0 auto 0; height: 1px;
+  background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--cyan) 50%, transparent), transparent);
+}
+.titlebar { display: flex; align-items: center; gap: 6px; padding: 0.7rem 1.1rem; background: color-mix(in srgb, var(--panel) 70%, var(--bg)); border-bottom: 1px solid var(--line); position: relative; }
+.dot { width: 10px; height: 10px; border-radius: 50%; }
+.dot-a { background: var(--pink); box-shadow: 0 0 6px 1px color-mix(in srgb, var(--pink) 70%, transparent); }
+.dot-b { background: var(--purple); box-shadow: 0 0 6px 1px color-mix(in srgb, var(--purple) 70%, transparent); }
+.dot-c { background: var(--cyan); box-shadow: 0 0 6px 1px color-mix(in srgb, var(--cyan) 70%, transparent); }
+.titlebar-text { margin-left: 8px; font-size: 0.8rem; color: var(--muted); }
+.window-body { padding: 1.25rem; }
+
+.log-view {
+  background: var(--bg); border: 1px solid var(--line); border-radius: 3px;
+  padding: 1rem; overflow-x: auto; white-space: pre-wrap; font-size: 0.82rem;
+  line-height: 1.5; max-height: 75vh; overflow-y: auto;
+  scrollbar-width: thin; scrollbar-color: var(--cyan) var(--panel);
+}
+code { font-family: var(--font-mono, monospace); }
+
+/* --------------------------------------------------------------------------
+   Data table
+   -------------------------------------------------------------------------- */
+.res-table { width: 100%; border-collapse: collapse; font-size: 0.8rem; background: var(--bg); border: 1px solid var(--line); border-radius: 3px; overflow: hidden; }
+.res-table th, .res-table td { text-align: left; padding: 0.5rem 0.7rem; border-bottom: 1px solid var(--line); }
+.res-table th { color: var(--muted); font-size: 0.7rem; letter-spacing: 0.4px; text-transform: uppercase; background: color-mix(in srgb, var(--panel) 60%, var(--bg)); }
+.res-table tr:last-child td { border-bottom: none; }
+.res-table tr:hover td { background: color-mix(in srgb, var(--cyan) 6%, transparent); }
+.empty-state { color: var(--muted); font-size: 0.85rem; padding: 1.5rem; text-align: center; border: 1px dashed var(--line); border-radius: 3px; }
+
+/* --------------------------------------------------------------------------
+   Text/select inputs
+   -------------------------------------------------------------------------- */
+.text-input {
+  background-color: var(--bg);
+  color: var(--fg);
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  padding: 0.5rem 0.7rem;
+  font-family: inherit;
+  font-size: 0.85rem;
+}
+.text-input:focus { outline: none; border-color: var(--cyan); box-shadow: 0 0 0 1px var(--cyan); }
+
+/* Native <select> chrome ignores background-color in some browsers unless
+   appearance is reset; also style the popup option list itself — limited
+   cross-browser support, but Firefox/Chromium both honor it. */
+select.text-input {
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  background-image: linear-gradient(45deg, transparent 50%, var(--cyan) 50%),
+                     linear-gradient(135deg, var(--cyan) 50%, transparent 50%);
+  background-position: calc(100% - 16px) center, calc(100% - 11px) center;
+  background-size: 5px 5px, 5px 5px;
+  background-repeat: no-repeat;
+  padding-right: 2rem;
+  cursor: pointer;
+}
+select.text-input option {
+  background-color: var(--panel);
+  color: var(--fg);
+}
+
+/* --------------------------------------------------------------------------
+   Rendered markdown — headers/code/tables themed with the active
+   CYBERGRID palette instead of one flat grey text dump.
+   -------------------------------------------------------------------------- */
+.markdown-body {
+  background: var(--bg); border: 1px solid var(--line); border-radius: 3px;
+  padding: 1.25rem 1.5rem; max-height: 75vh; overflow-y: auto; line-height: 1.6;
+}
+.markdown-body h1, .markdown-body h2, .markdown-body h3 {
+  color: var(--cyan); text-shadow: 0 0 8px color-mix(in srgb, var(--cyan) 30%, transparent);
+  border-bottom: 1px solid var(--line); padding-bottom: 0.3rem; margin-top: 1.4rem;
+}
+.markdown-body h1:first-child { margin-top: 0; }
+.markdown-body h2 { color: var(--purple); }
+.markdown-body h3 { color: var(--pink); font-size: 1rem; border-bottom: none; }
+.markdown-body a { color: var(--cyan); }
+.markdown-body strong { color: var(--acid); }
+.markdown-body code {
+  background: color-mix(in srgb, var(--cyan) 12%, var(--panel));
+  color: var(--cyan);
+  border: 1px solid color-mix(in srgb, var(--cyan) 35%, transparent);
+  border-radius: 3px;
+  padding: 0.1rem 0.35rem; font-size: 0.85em;
+}
+.markdown-body pre {
+  background: var(--panel); border: 1px solid var(--line); border-radius: 3px;
+  padding: 0.9rem; overflow-x: auto;
+}
+.markdown-body pre code { background: none; border: none; padding: 0; color: var(--fg); }
+.markdown-body table { width: 100%; border-collapse: collapse; margin: 0.75rem 0; }
+.markdown-body th, .markdown-body td { text-align: left; padding: 0.4rem 0.6rem; border-bottom: 1px solid var(--line); }
+.markdown-body th { color: var(--muted); text-transform: uppercase; font-size: 0.72rem; background: color-mix(in srgb, var(--panel) 60%, var(--bg)); }
+.markdown-body ul, .markdown-body ol { padding-left: 1.4rem; }
+.markdown-body hr { border: none; border-top: 1px solid var(--line); margin: 1rem 0; }
+.markdown-body blockquote { border-left: 3px solid var(--purple); margin: 0.6rem 0; padding: 0.2rem 0.8rem; color: var(--muted); }
+
+/* --------------------------------------------------------------------------
+   Popup viewer — a sized modal for "view" links/actions, instead of a
+   full page navigation. Also the frame the custom theme creator uses.
+   -------------------------------------------------------------------------- */
+.viewer-overlay {
+  position: fixed; inset: 0; background: rgba(0,0,0,0.75); z-index: 1000;
+  display: flex; align-items: center; justify-content: center; padding: 2rem;
+}
+/* Lighter scrim specifically for the theme creator — the whole point is
+   watching the real page repaint live as colors change, which a near-
+   opaque backdrop mostly defeats. */
+#theme-creator-overlay { background: rgba(0,0,0,0.35); }
+.viewer-window {
+  width: min(900px, 100%); max-height: 85vh; display: flex; flex-direction: column;
+}
+.viewer-body { padding: 0; overflow: hidden; flex: 1; display: flex; flex-direction: column; min-height: 0; }
+.viewer-body .markdown-body { max-height: none; flex: 1; overflow-y: auto; border: none; border-radius: 0; }
+
+/* --------------------------------------------------------------------------
+   Custom theme creator — wider than the plain popup, with a real
+   live-preview column (not just "peek at the page behind the modal",
+   which the modal's own backdrop mostly defeats).
+   -------------------------------------------------------------------------- */
+.ct-window { width: min(1200px, 96vw); }
+.ct-layout {
+  display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
+  gap: 0; flex: 1; min-height: 0; overflow: hidden;
+}
+.ct-controls { padding: 1.25rem; overflow-y: auto; }
+.ct-preview {
+  padding: 1.25rem; overflow-y: auto;
+  background: var(--bg); border-left: 1px solid var(--line);
+}
+@media (max-width: 800px) {
+  .ct-layout { grid-template-columns: 1fr; }
+  .ct-preview { border-left: none; border-top: 1px solid var(--line); }
+}
+.viewer-actions { display: flex; gap: 0.5rem; padding: 0.6rem 1rem; border-top: 1px solid var(--line); justify-content: flex-end; }
+.viewer-actions button, .viewer-actions a {
+  background: var(--bg); color: var(--cyan); border: 1px solid var(--line);
+  padding: 0.35rem 0.9rem; border-radius: 3px; font-family: inherit; font-size: 0.8rem;
+  cursor: pointer; text-decoration: none;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.viewer-actions button:hover, .viewer-actions a:hover {
+  border-color: var(--cyan); box-shadow: 0 0 10px color-mix(in srgb, var(--cyan) 30%, transparent);
+}
+
+.win-close {
+  position: absolute; right: 1rem; top: 50%; transform: translateY(-50%);
+  color: var(--muted); text-decoration: none; font-size: 0.85rem;
+  width: 22px; height: 22px; display: flex; align-items: center; justify-content: center;
+  border-radius: 3px; border: 1px solid transparent;
+  transition: color 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+}
+.win-close:hover { color: var(--red); border-color: var(--red); background: color-mix(in srgb, var(--red) 10%, transparent); }
+
+/* --------------------------------------------------------------------------
+   Custom theme creator — swatch controls
+   -------------------------------------------------------------------------- */
+.field-label { display: block; font-size: 0.8rem; color: var(--muted); margin-bottom: 0.3rem; }
+.ct-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 0.6rem; }
+.ct-swatch {
+  display: flex; flex-direction: column; gap: 0.3rem; align-items: center;
+  font-size: 0.72rem; color: var(--muted); text-transform: uppercase;
+}
+.ct-swatch input[type="color"] {
+  width: 100%; height: 2.2rem; border: 1px solid var(--line); border-radius: 3px;
+  background: var(--bg); cursor: pointer; padding: 2px;
+}
+
+@media (max-width: 640px) {
+  .topbar { flex-direction: column; gap: 0.6rem; align-items: stretch; }
+  .grid { grid-template-columns: 1fr; }
+  .viewer-overlay { padding: 0.5rem; }
+}

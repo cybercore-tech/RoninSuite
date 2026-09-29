@@ -1,39 +1,38 @@
 const root = document.documentElement;
-const selector = document.querySelector('#themeSelect');
-const themeCount = document.querySelector('#themeCount');
-const familyLabels = {
-  cyberdyne: 'CYBERDYNE',
-  cyberpunk: 'CYBERPUNK',
-  default: 'CLASSICS',
-  dystopian: 'DYSTOPIAN',
-  neosynth: 'NEOSYNTH',
-  synthwave: 'SYNTHWAVE'
-};
-const themeCache = new Map();
-const formatName = name => name.replaceAll('-', ' ').toUpperCase();
+const menu = document.querySelector('#themeMenu');
+const picker = document.querySelector('#themePicker');
+const currentLabel = document.querySelector('#currentThemeLabel');
+const currentSwatch = document.querySelector('#currentSwatch');
+const familiesLabel = {cyberdyne:'CYBERDYNE',cyberpunk:'CYBERPUNK',default:'CLASSICS',dystopian:'DYSTOPIAN',neosynth:'NEOSYNTH',synthwave:'SYNTHWAVE'};
+const cache = new Map();
+const nice = value => value.replaceAll('-', ' ');
 
-async function getPalette(family, name) {
+async function paletteFor(family, name) {
   const key = `${family}/${name}`;
-  if (themeCache.has(key)) return themeCache.get(key);
-  const response = await fetch(`data/themes/${key}.json`);
-  if (!response.ok) throw new Error(`Theme palette unavailable: ${name}`);
-  const palette = await response.json();
-  themeCache.set(key, palette);
-  return palette;
+  if (!cache.has(key)) {
+    const response = await fetch(`data/themes/${key}.json`);
+    if (!response.ok) throw new Error(`Theme unavailable: ${name}`);
+    cache.set(key, await response.json());
+  }
+  return cache.get(key);
 }
 
-function setTheme(name, palette) {
-  const variables = {
-    bg: '--bg', panel: '--panel', line: '--line', white: '--text', muted: '--muted',
-    acid_green: '--accent', hot_pink: '--accent2', cyan: '--accent3',
-    purple: '--purple', orange: '--orange', red: '--danger'
-  };
-  for (const [key, variable] of Object.entries(variables)) {
-    root.style.setProperty(variable, `#${palette[key]}`);
-  }
+function applyTheme(name, palette) {
+  const vars = {bg:'--bg',white:'--fg',acid_green:'--acid',hot_pink:'--pink',purple:'--purple',cyan:'--cyan',orange:'--orange',red:'--red',panel:'--panel',line:'--line',muted:'--muted'};
+  for (const [key, variable] of Object.entries(vars)) root.style.setProperty(variable, `#${palette[key]}`);
   root.dataset.theme = name;
   document.querySelector('meta[name="theme-color"]').content = `#${palette.bg}`;
+  currentLabel.textContent = nice(name);
+  currentSwatch.style.background = `#${palette.cyan}`;
+  document.querySelectorAll('[data-theme-name]').forEach(button => button.setAttribute('aria-current', String(button.dataset.themeName === name)));
   localStorage.setItem('roninsuite-theme', name);
+}
+
+async function choose(name, family) {
+  try {
+    applyTheme(name, await paletteFor(family, name));
+    history.replaceState(null, '', `?theme=${encodeURIComponent(name)}`);
+  } catch (error) { console.error(error); }
 }
 
 async function bootThemes() {
@@ -41,56 +40,60 @@ async function bootThemes() {
   if (!response.ok) throw new Error('Cybercore theme schema unavailable');
   const schema = await response.json();
   const families = Object.entries(schema.families).filter(([family]) => family !== 'cybercore-tech');
-  const count = families.reduce((total, [, names]) => total + names.length, 0);
-  themeCount.textContent = String(count);
-  selector.replaceChildren();
+  let count = 0;
   for (const [family, names] of families) {
-    const group = document.createElement('optgroup');
-    group.label = familyLabels[family] || family.toUpperCase();
-    for (const name of names) {
-      const option = document.createElement('option');
-      option.value = name;
-      option.textContent = formatName(name);
-      option.dataset.family = family;
-      group.append(option);
+    count += names.length;
+    const heading = document.createElement('div');
+    heading.className = 'theme-family';
+    heading.textContent = `${familiesLabel[family] || family.toUpperCase()} · ${names.length}`;
+    menu.append(heading);
+    const palettes = await Promise.all(names.map(name => paletteFor(family, name)));
+    for (const [index, name] of names.entries()) {
+      const palette = palettes[index];
+      const button = document.createElement('button');
+      button.className = 'theme-opt'; button.type = 'button'; button.setAttribute('role', 'menuitem');
+      button.dataset.themeName = name;
+      const swatch = document.createElement('span'); swatch.className = 'swatch-dot'; swatch.style.background = `#${palette.cyan}`;
+      button.append(swatch, document.createTextNode(nice(name)));
+      button.addEventListener('click', () => { choose(name, family); menu.classList.remove('open'); picker.setAttribute('aria-expanded', 'false'); });
+      menu.append(button);
+      const card = document.createElement('button');
+      card.type = 'button'; card.className = 'theme-card'; card.dataset.themeName = name; card.setAttribute('aria-label', `Preview ${nice(name)} theme`);
+      const strip = document.createElement('span'); strip.className = 'strip';
+      ['bg','panel','cyan','acid_green','hot_pink','purple'].forEach(key => { const swatchPart = document.createElement('span'); swatchPart.style.background = `#${palette[key]}`; strip.append(swatchPart); });
+      const title = document.createElement('span'); title.textContent = nice(name);
+      const familyName = document.createElement('span'); familyName.className = 'fam'; familyName.textContent = familiesLabel[family] || family.toUpperCase();
+      card.append(strip, title, familyName); card.addEventListener('click', () => choose(name, family));
+      document.querySelector('#themeGrid').append(card);
     }
-    selector.append(group);
   }
+  document.querySelector('#themeGrid').setAttribute('aria-label', `${count} Cybercore themes`);
+  const allNames = families.flatMap(([, names]) => names);
   const requested = new URLSearchParams(location.search).get('theme');
   const saved = localStorage.getItem('roninsuite-theme');
-  const allNames = families.flatMap(([, names]) => names);
   const active = [requested, saved, 'cyberpunk-neon'].find(name => name && allNames.includes(name));
-  selector.value = active;
   const family = families.find(([, names]) => names.includes(active))[0];
-  setTheme(active, await getPalette(family, active));
-  selector.addEventListener('change', async () => {
-    const selectedFamily = selector.selectedOptions[0].dataset.family;
-    try {
-      setTheme(selector.value, await getPalette(selectedFamily, selector.value));
-      history.replaceState(null, '', `?theme=${encodeURIComponent(selector.value)}`);
-    } catch (error) {
-      console.error(error);
-    }
-  });
+  applyTheme(active, await paletteFor(family, active));
 }
 
-bootThemes().catch(error => {
-  console.error(error);
-  selector.replaceChildren(new Option('THEMES UNAVAILABLE', ''));
+picker.addEventListener('click', () => {
+  const open = menu.classList.toggle('open');
+  picker.setAttribute('aria-expanded', String(open));
 });
+document.addEventListener('click', event => {
+  if (!event.target.closest('.theme-picker-wrap')) { menu.classList.remove('open'); picker.setAttribute('aria-expanded', 'false'); }
+});
+document.addEventListener('keydown', event => { if (event.key === 'Escape') { menu.classList.remove('open'); picker.setAttribute('aria-expanded', 'false'); } });
+
+bootThemes().catch(error => console.error(error));
 
 const lightbox = document.querySelector('#lightbox');
 const lightboxImage = lightbox.querySelector('img');
-document.querySelectorAll('.screen-image').forEach(button => {
-  button.addEventListener('click', () => {
-    const image = button.querySelector('img');
-    lightboxImage.src = button.dataset.full;
-    lightboxImage.alt = image.alt;
-    lightbox.showModal();
-  });
-});
+document.querySelectorAll('.screen-image').forEach(button => button.addEventListener('click', () => {
+  lightboxImage.src = button.dataset.full;
+  lightboxImage.alt = button.querySelector('img').alt;
+  lightbox.showModal();
+}));
 lightbox.querySelector('.lightbox-close').addEventListener('click', () => lightbox.close());
-lightbox.addEventListener('click', event => {
-  if (event.target === lightbox) lightbox.close();
-});
-lightbox.addEventListener('close', () => { lightboxImage.removeAttribute('src'); });
+lightbox.addEventListener('click', event => { if (event.target === lightbox) lightbox.close(); });
+lightbox.addEventListener('close', () => lightboxImage.removeAttribute('src'));
