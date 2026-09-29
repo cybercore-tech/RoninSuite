@@ -11,6 +11,13 @@ A normal system install has **no** marker, so its data lives in
 
 ## 1. Put it on the stick
 
+`make-usb.sh` packages a **provisioned staging checkout**. The Git repository
+contains the RoninSuite application and packaging scripts, but does not store
+the generated Python runtime, native libraries, or pentest-tool payloads. Those
+must already be present under `toolchain/` and `bin/` as in the completed build;
+the script checks for the required components and stops if any are missing. A
+plain Git clone by itself is not a complete offline USB build.
+
 ```bash
 # from a normal checkout
 scripts/make-usb.sh /run/media/$USER/MYSTICK
@@ -27,35 +34,26 @@ scripts/make-usb.sh /run/media/$USER/SUBGRIDSEC/Tools
 
 ```bash
 cd /run/media/$USER/MYSTICK/RoninSuite
-./bin/ronin doctor      # first run: bootstraps uv + Python 3.13 + deps
+./bin/ronin doctor      # checks the bundled runtime and tools
 ./bin/ronin             # launch the TUI
 ```
 
 `bin/ronin`:
 
 - resolves the project root from its own location and exports `RONIN_HOME`;
-- finds `uv` (system → vendored `.cache/uv/uv` → fetches it, needs network once);
-- on **exFAT / NTFS / FAT** it puts the Python virtualenv under
-  `~/.cache/roninsuite/venv` on the *host* (those filesystems can't store a venv),
-  while your engagements and reports still land on the stick;
-- on ext4 / btrfs / xfs the venv sits in the project dir on the stick.
+- runs bundled CPython 3.13 and preinstalled application dependencies;
+- does not download packages or create a Python virtualenv at first launch.
 
-## 3. Offline sticks
+## 3. First launch
 
-The first `./bin/ronin` needs network to fetch `uv`, Python and the Python deps.
-For a stick that must work with no connectivity:
+Run `./bin/ronin doctor` on Linux. The app, Python runtime, dependencies, native
+libraries, pentest tools, and their data are carried on the USB. No network
+access or host Python/pentest-tool installation is needed.
 
-1. Run `./bin/ronin doctor` once on a networked machine **with the same CPU
-   architecture and libc** (x86-64 glibc for a normal Arch/Debian target).
-2. Copy the resulting environment next to the project:
-   - ext4/btrfs stick: `.venv/` is already on the stick — done.
-   - exFAT stick: also copy `~/.cache/roninsuite/` to the target's
-     `~/.cache/roninsuite/`, or accept that the venv rebuilds on first use.
-3. The underlying pentest tools (nmap, nuclei, …) are **not** bundled. Either:
-   - install them on the target: `./bin/ronin doctor --install`, or
-   - boot a distro that already ships them (Kali), or
-   - drop static builds of the Go tools (nuclei, httpx, ffuf, naabu) into
-     `RoninSuite/bin/` — `bin/` is on `PATH` when launched via `bin/ronin`.
+The portable build includes the 12 tools that currently have RoninSuite
+adapters: subfinder, nmap, naabu, httpx, ffuf, feroxbuster, nuclei, nikto,
+testssl.sh, sqlmap, hydra, and commix. Nuclei templates are included too.
+Their launchers are in `bin/` and payloads are under `toolchain/`.
 
 ## 4. Pairing with the SUBGRIDSEC Ventoy stick
 
@@ -66,7 +64,7 @@ that same stick, then:
 
 ```bash
 cd /run/media/*/SUBGRIDSEC/Tools/RoninSuite   # or wherever it auto-mounts
-./bin/ronin doctor --install                  # pull the toolchain into the live env
+./bin/ronin doctor                             # check the bundled toolchain
 ./bin/ronin
 ```
 
@@ -75,9 +73,17 @@ are readable from any OS afterwards.
 
 ## What travels vs. what doesn't
 
+The compiled tools and bundled runtimes are Linux x86-64 builds. The USB is exFAT
+for file storage and exchange on Windows and macOS, but those systems cannot run
+this Linux application/toolchain. The current bundled native libraries require
+glibc 2.44 or newer on Linux x86-64; the USB bundles the other tool libraries
+and runtimes. Basic TCP
+scans run without root; raw SYN, OS-detection, and UDP scans require elevated
+privileges. The USB does not grant capabilities or elevate processes.
+`doctor --all` also lists extra catalog entries without RoninSuite adapters;
+they are not included in this integrated bundle.
+
 | Travels on the stick | Stays on the host |
 |---|---|
-| All `ronin/` code, templates, scripts | Python virtualenv (on exFAT/NTFS) |
-| `engagements/<slug>/` (scope, evidence) | `uv`'s global download cache |
-| `reports/<slug>/` (MD/HTML/PDF) | system packages (nmap, nuclei, …) unless installed there |
-| `ronin.db`, `audit.log` | |
+| App, runtimes, tools, templates, Python dependencies | Nothing required for the app runtime |
+| `engagements/<slug>/`, reports, `ronin.db`, `audit.log` | |

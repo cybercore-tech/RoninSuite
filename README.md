@@ -73,6 +73,10 @@ run.
 
 ## Install
 
+This section installs a development/system copy. The prebuilt USB bundle has
+its own Python runtime and dependencies and does not require `uv`; see
+[`USB.md`](USB.md).
+
 Requires [`uv`](https://docs.astral.sh/uv/). Python 3.13 is fetched automatically.
 
 ```bash

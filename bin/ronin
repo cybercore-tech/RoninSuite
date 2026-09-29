@@ -1,43 +1,22 @@
 #!/bin/sh
-# RoninSuite portable launcher.  Runs from anywhere - a normal checkout or a USB
-# stick.  Resolves the project root relative to this script, bootstraps `uv`
-# (and Python 3.13 + deps) on first run, and keeps the virtualenv off exFAT/FAT
-# media where venvs cannot live.
+# RoninSuite portable launcher. All application dependencies and runtimes are
+# bundled beside this script; it does not install packages on first run.
 set -eu
 
 SELF=$(readlink -f "$0" 2>/dev/null || realpath "$0" 2>/dev/null || echo "$0")
 ROOT=$(CDPATH= cd -- "$(dirname -- "$SELF")/.." && pwd)
-# Don't force RONIN_HOME: ronin/config.py decides (portable marker vs. system
-# ~/.local/share/roninsuite).  Honour it only if the caller already set one.
+# The copied native libraries were built against glibc 2.44. Fail with a clear
+# message before Python emits a less useful missing-version-symbol error.
+HOST_GLIBC=$(getconf GNU_LIBC_VERSION 2>/dev/null | sed -n 's/^glibc //p' || true)
+if [ -n "$HOST_GLIBC" ] && [ "$(printf '%s\n' 2.44 "$HOST_GLIBC" | sort -V | head -n 1)" != "2.44" ]; then
+    echo "RoninSuite: Linux x86-64 with glibc 2.44+ required (found $HOST_GLIBC)." >&2
+    exit 1
+fi
+PATH="$ROOT/bin:$PATH"
+PYTHONHOME="$ROOT/toolchain/python"
+PYTHONPATH="$ROOT/toolchain/site-packages:$ROOT${PYTHONPATH:+:$PYTHONPATH}"
+LD_LIBRARY_PATH="$ROOT/toolchain/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+export PATH PYTHONHOME PYTHONPATH LD_LIBRARY_PATH
 [ -n "${RONIN_HOME:-}" ] && export RONIN_HOME || true
 
-# --- locate or install uv ----------------------------------------------------
-if command -v uv >/dev/null 2>&1; then
-    UV=uv
-elif [ -x "$ROOT/.cache/uv/uv" ]; then
-    UV="$ROOT/.cache/uv/uv"
-else
-    echo "RoninSuite: bootstrapping uv into $ROOT/.cache/uv (needs network, once)..." >&2
-    mkdir -p "$ROOT/.cache/uv"
-    export UV_UNMANAGED_INSTALL="$ROOT/.cache/uv"
-    if command -v curl >/dev/null 2>&1; then
-        curl -LsSf https://astral.sh/uv/install.sh | sh >&2
-    else
-        wget -qO- https://astral.sh/uv/install.sh | sh >&2
-    fi
-    UV="$ROOT/.cache/uv/uv"
-fi
-
-# --- keep the venv on a real filesystem -------------------------------------
-FSTYPE=$(stat -f -c %T "$ROOT" 2>/dev/null || echo unknown)
-case "$FSTYPE" in
-    msdos | exfat | vfat | ntfs | fuseblk)
-        VENV_PARENT="${XDG_CACHE_HOME:-$HOME/.cache}/roninsuite"
-        mkdir -p "$VENV_PARENT"
-        export UV_PROJECT_ENVIRONMENT="$VENV_PARENT/venv"
-        # engagements/reports still land on the stick via RONIN_HOME
-        ;;
-    *) : ;;
-esac
-
-exec "$UV" run --project "$ROOT" --python 3.13 ronin "$@"
+exec "$ROOT/toolchain/python/bin/python3.13" -m ronin "$@"
