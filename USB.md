@@ -1,4 +1,4 @@
-# Running RoninSuite from a USB stick
+# 🔌 Running RoninSuite from a USB stick
 
 RoninSuite is relocatable. `scripts/make-usb.sh` copies the code to the stick
 **and drops a `.ronin-portable` marker** — that marker tells `ronin/config.py` to
@@ -9,7 +9,7 @@ A normal system install has **no** marker, so its data lives in
 `~/.local/share/roninsuite` on the host, completely separate from any USB copy.
 `$RONIN_HOME` overrides both.
 
-## 1. Put it on the stick
+## 1. 💾 Put it on the stick
 
 `make-usb.sh` packages a **provisioned staging checkout**. The Git repository
 contains the RoninSuite application and packaging scripts, but does not store
@@ -30,7 +30,7 @@ scripts/make-usb.sh /run/media/$USER/SUBGRIDSEC/Tools
 
 `make bundle DEST=/run/media/$USER/MYSTICK` does the same.
 
-## 2. Run it on the target machine
+## 2. 🐧 Run it on the target machine
 
 ```bash
 cd /run/media/$USER/MYSTICK/RoninSuite
@@ -44,7 +44,7 @@ cd /run/media/$USER/MYSTICK/RoninSuite
 - runs bundled CPython 3.13 and preinstalled application dependencies;
 - does not download packages or create a Python virtualenv at first launch.
 
-## 3. First launch
+## 3. 🚀 First launch
 
 Run `./bin/ronin doctor` on Linux. The app, Python runtime, dependencies, native
 libraries, pentest tools, and their data are carried on the USB. No network
@@ -55,7 +55,7 @@ adapters: subfinder, nmap, naabu, httpx, ffuf, feroxbuster, nuclei, nikto,
 testssl.sh, sqlmap, hydra, and commix. Nuclei templates are included too.
 Their launchers are in `bin/` and payloads are under `toolchain/`.
 
-## 4. Pairing with the SUBGRIDSEC Ventoy stick
+## 4. 🧩 Pairing with the SUBGRIDSEC Ventoy stick
 
 The SUBGRIDSEC build has an exFAT data partition with a `/Tools` folder that's
 invisible to the boot menu. `scripts/make-usb.sh /run/media/$USER/SUBGRIDSEC/Tools`
@@ -71,7 +71,7 @@ cd /run/media/*/SUBGRIDSEC/Tools/RoninSuite   # or wherever it auto-mounts
 Reports written during a live session persist on the stick's exFAT partition and
 are readable from any OS afterwards.
 
-## What travels vs. what doesn't
+## 📦 What travels vs. what doesn't
 
 The compiled tools and bundled runtimes are Linux x86-64 builds. The USB is exFAT
 for file storage and exchange on Windows and macOS, but those systems cannot run

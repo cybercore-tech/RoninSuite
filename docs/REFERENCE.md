@@ -1,4 +1,4 @@
-# RoninSuite Reference
+# 📚 RoninSuite Reference
 
 Everything you can call — the `ronin` CLI, the TUI keys, and the Python API.
 
@@ -9,7 +9,7 @@ Everything you can call — the `ronin` CLI, the TUI keys, and the Python API.
 
 ---
 
-## 1. CLI
+## 1. ⌨️ CLI
 
 Install the launcher once: `scripts/install-cli.sh` (symlinks `bin/ronin` into
 `~/.local/bin`, and migrates any legacy in-repo data). After that everything is
@@ -26,7 +26,7 @@ Install the launcher once: `scripts/install-cli.sh` (symlinks `bin/ronin` into
 So your system install and any USB build have **independent** engagements /
 reports / `ronin.db`.
 
-### Overview
+### 🎛️ Overview
 
 | Command                                         | Purpose                                                               |
 | ----------------------------------------------- | --------------------------------------------------------------------- |
@@ -48,7 +48,7 @@ reports / `ronin.db`.
 | `ronin update [<tool> …]`                       | update outdated tools (`ronin update tools` shows the table)          |
 | `ronin sync`                                    | refresh the update cache + nuclei templates                           |
 
-### `ronin run`
+### ▶️ `ronin run`
 
 ```
 ronin run TOOL -t TARGET [-e ENGAGEMENT] [-o k=v]... [--intensity stealth|normal|aggressive]
@@ -65,7 +65,7 @@ ronin run TOOL -t TARGET [-e ENGAGEMENT] [-o k=v]... [--intensity stealth|normal
 
 Example: `ronin run nuclei -t https://app.acme.example -o severity=medium,high,critical`
 
-### `ronin report`
+### 📑 `ronin report`
 
 ```
 ronin report [ENGAGEMENT] [--run RUN_ID] [--level executive|technical|remediation|all] [--format md,html,pdf]
@@ -73,7 +73,7 @@ ronin report [ENGAGEMENT] [--run RUN_ID] [--level executive|technical|remediatio
 
 Regenerates from the findings DB — no re-scan. `--run` scopes to one run.
 
-### `ronin list`
+### 📋 `ronin list`
 
 ```
 ronin list tools [category]                 # wired adapters
@@ -84,7 +84,7 @@ ronin list runs [engagement]
 ronin list findings [engagement] [--severity high] [--status open]
 ```
 
-### `ronin show`
+### 🔍 `ronin show`
 
 ```
 ronin show client <slug>          # = ronin client <slug>
@@ -94,7 +94,7 @@ ronin show run <run-id>           # argv, evidence dir, findings
 ronin show report <engagement>/<stamp>
 ```
 
-### `ronin new`
+### 🆕 `ronin new`
 
 ```
 ronin new client --name "Acme Widgets LLC" [--slug acme] [--contact "J. Okafor"]
@@ -109,7 +109,7 @@ Re-running `new client` with the same slug **updates** it (only non-empty flags
 change). `--cadence-days` drives the "next due / overdue" reminders; `--rate` is a
 default unit rate for invoicing.
 
-### `ronin invoice`
+### 🧾 `ronin invoice`
 
 Lightweight tracking now; a full billing / invoice-generator / mail panel is
 planned as a separate Rust web app that shares this database.
@@ -123,7 +123,7 @@ ronin invoice status <id|prefix> paid     # draft | sent | paid | void
 
 `ronin client <slug>` and `ronin list clients` show billed / paid / outstanding.
 
-### `ronin add`
+### ➕ `ronin add`
 
 ```
 ronin add                              # interactive picker: numbered list → choose → install
@@ -144,7 +144,7 @@ Resolves against the **core catalog** (adapters) then the **extended catalog**
 `pacman → aur (yay) → go install → pipx/uv tool → git clone`. `git` tools land in
 `$RONIN_HOME/tools/<name>` and are **not** put on PATH.
 
-### `ronin update`
+### 🔄 `ronin update`
 
 ```
 ronin update                 # check → summary → prompt to update outdated,
@@ -159,7 +159,7 @@ ronin update --offline       # prefer the cached check
 `nuclei` also triggers `-update-templates`. To only install missing tools without
 touching updates: `ronin add --missing`.
 
-### `ronin sync`
+### 🔗 `ronin sync`
 
 ```
 ronin sync                                  # toolchain currency + nuclei templates
@@ -179,7 +179,7 @@ evidence never leaves the machine.
 each to its already-pushed metadata row by sha256 and serves it from the client
 portal. See `~/.sysops/subgridsec-deck`.
 
-### `ronin doctor`
+### 🩺 `ronin doctor`
 
 ```
 ronin doctor                         # status table (core catalog)
@@ -189,13 +189,13 @@ ronin doctor --install --only nmap,nuclei,httpx
 ronin doctor --install --dry-run
 ```
 
-### Exit codes
+### 🚦 Exit codes
 
 `0` ok · `1` usage / not-found · `2` scope violation or "out of scope".
 
 ---
 
-## 2. TUI
+## 2. 🖥️ TUI
 
 `ronin` (no args). Cybercore theme, six tabs.
 
@@ -233,11 +233,11 @@ Panes:
 
 ---
 
-## 3. Python API
+## 3. 🐍 Python API
 
 Import root is `ronin`. Public surface, module by module.
 
-### `ronin.config`
+### ⚙️ `ronin.config`
 
 | Object                                      | Signature     | Notes                                                                  |
 | ------------------------------------------- | ------------- | ---------------------------------------------------------------------- |
@@ -252,7 +252,7 @@ Import root is `ronin`. Public surface, module by module.
 | `load_dotenv()`                             | `() -> None`  | loads `.env` (env wins)                                                |
 | `INTENSITY`                                 | `dict`        | `stealth`/`normal`/`aggressive` → nmap timing, rate, concurrency       |
 
-### `ronin.core.models`
+### 🧩 `ronin.core.models`
 
 Pydantic models + enums.
 
@@ -271,7 +271,7 @@ Pydantic models + enums.
 | `ScopeDecision`                          | `target allowed reason matched_rule within_window`                                                                                                                                                                                                                                      |
 | `dedupe(list[Finding]) -> list[Finding]` | finalize + collapse by fingerprint, sort by severity/CVSS desc                                                                                                                                                                                                                          |
 
-### `ronin.core.cvss`
+### 📊 `ronin.core.cvss`
 
 | Function                     | Signature                                                                     |
 | ---------------------------- | ----------------------------------------------------------------------------- |
@@ -281,7 +281,7 @@ Pydantic models + enums.
 | `parse_vector(vector)`       | `(str) -> dict[str, str]`                                                     |
 | `SEVERITY_BANDS`             | tuple of `(lo, hi, name)`                                                     |
 
-### `ronin.core.scope`
+### 🛡️ `ronin.core.scope`
 
 | Object                           | Signature / notes                                                                       |
 | -------------------------------- | --------------------------------------------------------------------------------------- |
@@ -292,7 +292,7 @@ Pydantic models + enums.
 | `ScopeViolation(RuntimeError)`   | `.decision`                                                                             |
 | `SCOPE_TEMPLATE`                 | str — scaffold for a new `scope.yaml`                                                   |
 
-### `ronin.core.db`  (SQLite, one file at `paths().db`)
+### 🗃️ `ronin.core.db`  (SQLite, one file at `paths().db`)
 
 Clients: `upsert_client(Client)` · `get_client(slug) -> Client|None` ·
 `list_clients() -> list[Client]` · `delete_client(slug)` (cascades invoices).
@@ -319,12 +319,12 @@ open_by_severity resolved progress_pct`.
 
 Low-level: `connect()` context manager (schema + migrations applied on open).
 
-### `ronin.core.audit`
+### 🧾 `ronin.core.audit`
 
 `record(event, **fields) -> None` — append one JSON line to `audit.log`
 (`ts event operator host pid` + your fields).
 
-### `ronin.core.runner`
+### ⚡ `ronin.core.runner`
 
 ```python
 run_tool(adapter, engagement, target, *, options=None, intensity="normal",
@@ -336,25 +336,25 @@ Scope-check → build argv → exec with per-line streaming (`on_line(stream, te
 audit. Raises `ScopeViolation` (blocked, not forced), `ValueError` (force without
 reason), `FileNotFoundError` (tool binary missing).
 
-### `ronin.tools.base`
+### 🔧 `ronin.tools.base`
 
 | Object              | Notes                                                                                                                                                                                                                                                                                                |
 | ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `ToolAdapter` (ABC) | class attrs `name binary summary categories doc_url install aggressive default_timeout`; `is_installed() -> bool`; `options() -> list[Option]`; `option_defaults() -> dict`; **abstract** `build_argv(ctx) -> list[str]`, `parse(run, ctx) -> list[Finding]`; helper `_f(run, ctx, **kw) -> Finding` |
 | `RunContext`        | `engagement target evidence_dir options intensity result_files`; `.out(name) -> Path` (registers a result file)                                                                                                                                                                                      |
 
-### `ronin.tools.registry`
+### 📦 `ronin.tools.registry`
 
 `adapters() -> dict[str, ToolAdapter]` · `get(name) -> ToolAdapter` (raises
 `KeyError`) · `CATALOG: dict[str, dict]` — core install map (`category`,
 `install`, `aggressive`, `binary`).
 
-### `ronin.data.extended_tools`
+### 🧰 `ronin.data.extended_tools`
 
 `EXTENDED: dict[str, dict]` — `{category, desc, install, url}` per tool ·
 `categories() -> list[str]`.
 
-### `ronin.doctor`
+### 🩺 `ronin.doctor`
 
 | Function                                                              | Signature                                                                                     |
 | --------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
@@ -364,7 +364,7 @@ reason), `FileNotFoundError` (tool binary missing).
 | `update(names, *, dry_run=False) -> dict[str,str]`                    |                                                                                               |
 | `install_recipe(name, recipe, *, dry_run=False, update=False) -> str` | run one recipe                                                                                |
 
-### `ronin.updates`
+### 🔄 `ronin.updates`
 
 | Function                                | Signature                                                                                |
 | --------------------------------------- | ---------------------------------------------------------------------------------------- |
@@ -373,7 +373,7 @@ reason), `FileNotFoundError` (tool binary missing).
 | `UpdateReport`                          | `.tools .checked_at .nuclei_templates_age_days .pacman_updates`; `.outdated`, `.missing` |
 | `ToolUpdate`                            | `name category installed installed_version latest_version source status note`            |
 
-### `ronin.reports.render`
+### 📝 `ronin.reports.render`
 
 | Function                                                                                                   | Signature                                                                   |
 | ---------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
@@ -388,7 +388,7 @@ depth-parametrised) + `executive|technical|remediation.md.j2` + `report.html.j2`
 
 ---
 
-## 4. On-disk layout
+## 4. 📁 On-disk layout
 
 Data root = `~/.local/share/roninsuite` (system install), the code folder if it
 carries a `.ronin-portable` marker (USB), or `$RONIN_HOME`.

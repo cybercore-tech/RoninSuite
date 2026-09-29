@@ -1,0 +1,19 @@
+{
+  "schema_version": 2,
+  "active": "cybercore-tech",
+  "paths": {
+    "sysops_root": "~/.sysops",
+    "cargo_target_root": "~/.cargo-target",
+    "arch_sys_root": "~/.arch-sys",
+    "omarchy_config_root": "~/.config/omarchy"
+  },
+  "families": {
+    "cybercore-tech": ["cybercore-tech"],
+    "cyberdyne": ["cyberdyne-assassin", "cyberdyne-factory", "cyberdyne-hunter", "cyberdyne-infiltrator", "cyberdyne-judgment", "cyberdyne-logic", "cyberdyne-machine", "cyberdyne-neural", "cyberdyne-skynet", "cyberdyne-steel", "cyberdyne-system", "cyberdyne-t800"],
+    "cyberpunk": ["cyberpunk-alley", "cyberpunk-chrome", "cyberpunk-edge", "cyberpunk-glitch", "cyberpunk-grid", "cyberpunk-hacker", "cyberpunk-mainframe", "cyberpunk-neon", "cyberpunk-nexus", "cyberpunk-overdrive", "cyberpunk-spire", "cyberpunk-wire"],
+    "default": ["catppuccin-mocha", "cyberpunk-2077", "cyberpunk-neon-classic", "cyberpunk-sub-grid-zero", "dracula", "gruvbox-dark", "kanagawa", "neon-night", "nord", "synthwave-84", "synthwave-grid-runner", "tokyo-night"],
+    "dystopian": ["dystopian-ash", "dystopian-fallout", "dystopian-neon-rot", "dystopian-quarantine", "dystopian-ration", "dystopian-rebel", "dystopian-ruin", "dystopian-sector", "dystopian-slum", "dystopian-smog", "dystopian-ward", "dystopian-wasteland"],
+    "neosynth": ["neosynth-beam", "neosynth-core", "neosynth-drive", "neosynth-flare", "neosynth-flux", "neosynth-glow", "neosynth-laser-grid", "neosynth-nova", "neosynth-plasma", "neosynth-pulse", "neosynth-spark", "neosynth-wave"],
+    "synthwave": ["synthwave-arcade", "synthwave-cassette", "synthwave-cruise", "synthwave-delorean", "synthwave-horizon", "synthwave-miami", "synthwave-nightrun", "synthwave-outrun", "synthwave-palm", "synthwave-retro", "synthwave-sunset", "synthwave-vinyl"]
+  }
+}

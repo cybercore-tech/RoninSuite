@@ -1,4 +1,4 @@
-# RoninSuite
+# 🛡️ RoninSuite
 
 A portable **TUI pentest toolkit for Linux** with a focus on the tactical /
 offensive side, and a three-tier reporting engine (Executive / Technical /
@@ -9,9 +9,11 @@ Remediation) driven by a normalized findings model with CVSS v3.1 scoring.
 > scope decision and command. Use it only against systems you have written
 > permission to test.
 
+> 🌐 **Project site:** [RoninSuite / Cybercore](https://cybercore-tech.github.io/RoninSuite/) · 💻 [Source on GitHub](https://github.com/cybercore-tech/RoninSuite)
+
 ---
 
-## What it does
+## ✨ What it does
 
 - **Cybercore TUI** (Textual) with a tabbed console:
   **Dashboard** (context, overdue-retest and outdated-tool alerts, recent runs) ·
@@ -49,7 +51,7 @@ Remediation) driven by a normalized findings model with CVSS v3.1 scoring.
 
 - **Portable.** The whole folder runs from a USB stick; see `USB.md`.
 
-## Tool catalog
+## 🧰 Tool catalog
 
 Wired adapters (parse output → normalized findings):
 
@@ -71,7 +73,7 @@ Tools flagged **active** (ffuf, feroxbuster, sqlmap, hydra, commix, wpscan,
 netexec, kerbrute) require an explicit confirmation in the CLI/TUI before they
 run.
 
-## Install
+## ⚙️ Install
 
 This section installs a development/system copy. The prebuilt USB bundle has
 its own Python runtime and dependencies and does not require `uv`; see
@@ -94,7 +96,7 @@ System libraries for PDF (WeasyPrint) — Pango / Cairo / gdk-pixbuf — are alr
 present on most desktop Arch installs. If PDF export is unavailable, MD + HTML
 still render.
 
-## Use
+## 🚀 Use
 
 ```bash
 # 1. client + engagement (scope.yaml is scaffolded for you)
@@ -129,7 +131,7 @@ CLI knobs: `-o k=v` (repeatable) sets tool options, `--intensity
 stealth|normal|aggressive` scales rate limits and nmap timing, `--force --reason
 "..."` overrides scope (logged), `--run <id>` scopes a report to one run.
 
-## Layout
+## 🗂️ Layout
 
 ```
 ronin/
@@ -157,7 +159,7 @@ reports/<slug>/<ts>/ executive|technical|remediation .{md,html,pdf} + index.html
 ronin.db  audit.log
 ```
 
-## Add a tool adapter
+## 🔌 Add a tool adapter
 
 Create `ronin/tools/<tool>.py` with a `ToolAdapter` subclass implementing
 `build_argv(ctx)` and `parse(run, ctx)`, register it in
@@ -165,7 +167,7 @@ Create `ronin/tools/<tool>.py` with a `ToolAdapter` subclass implementing
 tool output into `tests/data/`, assert the extracted `Finding`s). Prefer the
 tool's JSON/XML output mode and write result files via `ctx.out("name.ext")`.
 
-## Tests
+## 🧪 Tests
 
 ```bash
 make test        # uv run pytest -q
@@ -174,13 +176,13 @@ make test        # uv run pytest -q
 A full worked example (all three tiers × MD/HTML/PDF, branded) is in
 `examples/sample-report/`.
 
-## Report branding
+## 🎨 Report branding
 
 Copy `brand.example.yaml` → `brand.yaml` (project root) to put your consultancy
 name, logo, accent colour, classification banner and footer on every generated
 report. The logo is embedded as a data URI so PDFs are self-contained.
 
-## Roadmap
+## 🧭 Roadmap
 
 - More adapters (amass, katana, whatweb, netexec, wpscan, …)
 - Cross-tool finding correlation beyond title/target/CVE fingerprint
@@ -188,6 +190,6 @@ report. The logo is embedded as a data URI so PDFs are self-contained.
 - API-key wiring for recon sources (Shodan/Censys/Chaos)
 - Windows toolkit (separate, later)
 
-## License
+## 📜 License
 
 MIT — see `LICENSE`. Set your name/organisation in the copyright line.
